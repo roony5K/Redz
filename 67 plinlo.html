@@ -1,6 +1,4 @@
-
-
-/* <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -12,6 +10,7 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{overflow:hidden;background:#000;font-family:var(--fd);color:var(--text);touch-action:none;user-select:none;-webkit-user-select:none}
 body.desktop{cursor:none}
+body.desktop.pointer-unlocked{cursor:default}
 canvas{display:block}
 
 /* Screens */
@@ -113,6 +112,9 @@ canvas{display:block}
 #mbFire{position:absolute;right:12px;bottom:12px;width:70px;height:70px;border-radius:50%;border:3px solid var(--accent);background:rgba(255,51,51,.25);color:var(--accent);font-size:14px;font-weight:700;pointer-events:auto;display:flex;align-items:center;justify-content:center;touch-action:none;z-index:45;-webkit-tap-highlight-color:transparent}
 #mbFire:active{background:rgba(255,51,51,.5)}
 #mbSprint.sprint-active{background:rgba(0,255,136,.4);border-color:var(--friendly);color:var(--friendly)}
+
+/* Pause Indicator */
+#pauseHint{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);padding:20px 40px;border:2px solid var(--accent);color:var(--text);font-family:var(--fd);font-size:18px;letter-spacing:2px;z-index:150;pointer-events:none;opacity:0;transition:opacity 0.3s}
 
 /* Responsive */
 @media(max-width:600px){
@@ -395,17 +397,28 @@ renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadow
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.2;
 document.body.appendChild(renderer.domElement);
 
+// FIX: Initialize PointerLockControls with proper error handling
 const controls = new PointerLockControls(camera, document.body);
 
-if (!isMobile) {
-  const startBtn = document.getElementById('startBtn');
-  if (startBtn) {
-    startBtn.addEventListener('click', function () {
-      initAudio();
-      controls.lock();
-    });
-  }
+// FIX: Add pointer lock error handling
+document.addEventListener('pointerlockerror', () => {
+  console.warn('Pointer lock failed - may require user gesture');
+  showNotification('Click the game to enable mouse look');
+});
+
+function showNotification(msg) {
+  const notif = document.createElement('div');
+  notif.style.cssText = `position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.9);color:var(--text);padding:12px 24px;border:2px solid var(--warning);font-family:var(--fd);font-size:14px;letter-spacing:1px;z-index:300;border-radius:4px;animation:fadeSlide 3s forwards`;
+  notif.textContent = msg;
+  document.body.appendChild(notif);
+  setTimeout(() => notif.remove(), 3000);
 }
+
+// Add CSS animation for notifications
+const style = document.createElement('style');
+style.textContent = `@keyframes fadeSlide{0%{opacity:0;transform:translate(-50%,20px)}10%{opacity:1;transform:translate(-50%,0)}90%{opacity:1}100%{opacity:0;transform:translate(-50%,20px)}}`;
+document.head.appendChild(style);
+
 scene.add(new THREE.AmbientLight(0x8899bb, 1.0));
 scene.add(new THREE.HemisphereLight(0x87ceeb, 0x556644, 0.8));
 const dirLight = new THREE.DirectionalLight(0xfff4e0, 2.0);
@@ -877,7 +890,6 @@ function playerShoot() {
     const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
     const spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(0.5));
     activeGrenades.push(new Projectile(spawnPos, dir, w.id));
-    // FIX: Store weapon ID at throw time, only restore if still equipped
     const thrownId = currentWeaponId();
     weaponModels.molotov.visible = false;
     setTimeout(() => { if (currentWeaponId() === thrownId) showOnlyWeapon(thrownId); }, 800);
@@ -887,7 +899,6 @@ function playerShoot() {
     if (state.shootCooldown > 0) return;
     state.shootCooldown = w.fireRate; state.meleeSwing = 1;
     playSound(w.soundType);
-    // FIX: Reset melee swing when dash starts to prevent animation snap
     if (w.id === 'scythe' && keys.shift && state.canDash) {
       state.isDashing = true; state.dashTimer = 0.2; state.dashCooldown = 2.0; state.canDash = false;
       state.meleeSwing = 0;
@@ -968,13 +979,64 @@ document.addEventListener('wheel', e => {
   else { let cat = state.currentCat, idx = state.currentIdx[cat]; idx--; if (idx < 0) { cat = (cat + 3) % 4; idx = SLOTS[cat].length - 1; } switchWeapon(cat, idx); }
 });
 
+// FIX: Improved pointer lock event handlers
 controls.addEventListener('lock', () => {
+  // Hide cursor on desktop when locked
+  if (!isMobile) {
+    document.body.classList.remove('pointer-unlocked');
+  }
+  
   if (!state.playing) {
-    state.playing = true; document.getElementById('startScreen').style.display = 'none'; document.getElementById('weaponSelectScreen').style.display = 'none'; document.getElementById('hud').style.display = 'block'; document.getElementById('deathScreen').style.display = 'none';
-    if (bots.length === 0 && !waveTransition) { spawnWave(state.wave); announceWave(state.wave); }
+    state.playing = true; 
+    document.getElementById('startScreen').style.display = 'none'; 
+    document.getElementById('weaponSelectScreen').style.display = 'none'; 
+    document.getElementById('hud').style.display = 'block'; 
+    document.getElementById('deathScreen').style.display = 'none';
+    if (bots.length === 0 && !waveTransition) { 
+      spawnWave(state.wave); 
+      announceWave(state.wave); 
+    }
   }
 });
-controls.addEventListener('unlock', () => { if (state.health > 0 && state.playing) { document.getElementById('startScreen').style.display = 'flex'; } });
+
+controls.addEventListener('unlock', () => {
+  // Show cursor on desktop when unlocked
+  if (!isMobile) {
+    document.body.classList.add('pointer-unlocked');
+  }
+  
+  // Only show pause hint if player is alive and intentionally paused (not death)
+  if (state.health > 0 && state.playing) {
+    // Remove any existing pause hint
+    const existing = document.getElementById('pauseHint');
+    if (existing) existing.remove();
+    
+    const pauseHint = document.createElement('div');
+    pauseHint.id = 'pauseHint';
+    pauseHint.textContent = 'PAUSED - CLICK TO RESUME';
+    document.body.appendChild(pauseHint);
+    
+    // Animate in
+    setTimeout(() => pauseHint.style.opacity = '1', 10);
+    
+    // Auto-hide after 2.5 seconds
+    setTimeout(() => {
+      pauseHint.style.opacity = '0';
+      setTimeout(() => pauseHint.remove(), 300);
+    }, 2500);
+  }
+});
+
+// FIX: Click handler to request pointer lock on desktop
+document.addEventListener('click', (e) => {
+  // Don't intercept clicks on buttons or UI elements
+  if (e.target.closest('button, .weapon-card, .mobBtn, #mbFire, #respawnBtn')) return;
+  
+  // Only request pointer lock on desktop when playing and not locked
+  if (!isMobile && state.playing && !controls.isLocked) {
+    controls.lock();
+  }
+}, { passive: true });
 
 /* ===== MOBILE CONTROLS ===== */
 const mobileControls = document.getElementById('mobileControls');
@@ -991,7 +1053,6 @@ let joyActive = false, joyCenter = { x: 0, y: 0 }, joyPos = { x: 0, y: 0 };
 let lookTouchId = null, lastLookPos = { x: 0, y: 0 };
 let lookDelta = { x: 0, y: 0 };
 
-// SHIFT LOCK: Toggle sprint on mobile
 let sprintLocked = false;
 const resetSprint = () => { sprintLocked = false; keys.shift = false; if (mbSprint) { mbSprint.classList.remove('sprint-active'); } };
 
@@ -1033,7 +1094,6 @@ function initMobileControls() {
   lookZone.addEventListener('touchstart', e => {
     e.preventDefault();
     const t = e.changedTouches[0];
-    // Ignore touches in button area (bottom-right)
     const bw = 110, bh = 220;
     if (t.clientX > window.innerWidth - bw && t.clientY > window.innerHeight - bh) return;
     lookTouchId = t.identifier; lastLookPos = { x: t.clientX, y: t.clientY };
@@ -1060,12 +1120,10 @@ function initMobileControls() {
     }
   });
 
-  // Fire button: hold to fire (auto weapons fire via game loop)
   mbFire.addEventListener('touchstart', e => { e.preventDefault();e.stopPropagation(); mouseDown = true; }, { passive: false });
   mbFire.addEventListener('touchend', e => { e.preventDefault();e.stopPropagation(); mouseDown = false; }, { passive: false });
   mbFire.addEventListener('touchcancel', e => { mouseDown = false; });
 
-  // Jump button
   mbJump.addEventListener('touchstart', e => {
     e.preventDefault();e.stopPropagation();
     keys.space = true;
@@ -1076,7 +1134,6 @@ function initMobileControls() {
   mbJump.addEventListener('touchend', e => { e.preventDefault();e.stopPropagation(); keys.space = false; if (state.isGrounded) { state.canDoubleJump = true; if (currentWeapon().id === 'fist') updateAbilityIndicators(); } });
   mbJump.addEventListener('touchcancel', e => { keys.space = false; });
 
-  // Sprint button - TOGGLE (Shift Lock)
   mbSprint.addEventListener('touchstart', e => {
     e.preventDefault();e.stopPropagation();
     sprintLocked = !sprintLocked;
@@ -1084,7 +1141,6 @@ function initMobileControls() {
     mbSprint.classList.toggle('sprint-active', sprintLocked);
   }, { passive: false });
 
-  // Reload button
   mbReload.addEventListener('touchstart', e => { e.preventDefault();e.stopPropagation(); if (state.playing) startReload(); }, { passive: false });
 }
 
@@ -1116,31 +1172,78 @@ function initWeaponSelection() {
     for (let cat = 0; cat < 4; cat++) { const idx = SLOTS[cat].indexOf(loadout[cat]); if (idx >= 0) state.currentIdx[cat] = idx; }
     updateSlotUI();
     document.getElementById('weaponSelectScreen').style.display = 'none';
-    if (isMobile) { initMobileControls(); state.playing = true; document.getElementById('hud').style.display = 'block'; document.getElementById('deathScreen').style.display = 'none'; if (bots.length === 0 && !waveTransition) { spawnWave(state.wave); announceWave(state.wave); } }
-    else controls.lock();
+    if (isMobile) { 
+      initMobileControls(); 
+      state.playing = true; 
+      document.getElementById('hud').style.display = 'block'; 
+      document.getElementById('deathScreen').style.display = 'none'; 
+      if (bots.length === 0 && !waveTransition) { 
+        spawnWave(state.wave); 
+        announceWave(state.wave); 
+      } 
+    }
+    else {
+      // FIX: Request pointer lock after confirming loadout on desktop
+      controls.lock();
+    }
   });
 }
 
 document.getElementById('startBtn').addEventListener('click', () => {
-  initAudio(); initWeaponSelection();
-  if (isMobile) { document.getElementById('desktopControls').style.display = 'none'; document.getElementById('mobileControlsHelp').style.display = 'grid'; }
+  initAudio(); 
+  initWeaponSelection();
+  if (isMobile) { 
+    document.getElementById('desktopControls').style.display = 'none'; 
+    document.getElementById('mobileControlsHelp').style.display = 'grid'; 
+  }
   document.getElementById('startScreen').style.display = 'none';
   document.getElementById('weaponSelectScreen').style.display = 'flex';
 });
-document.getElementById('respawnBtn').addEventListener('click', () => { respawnPlayer(); if (!isMobile) controls.lock(); });
 
-function playerDeath() { state.playing = false; if (!isMobile) controls.unlock(); document.getElementById('deathScreen').style.display = 'flex'; document.getElementById('deathStats').innerHTML = `KILLS: ${state.kills}<br>WAVES SURVIVED: ${state.wave}`; }
+document.getElementById('respawnBtn').addEventListener('click', () => { 
+  respawnPlayer(); 
+  if (!isMobile) {
+    // FIX: Re-request pointer lock after respawn on desktop
+    controls.lock();
+  }
+});
+
+function playerDeath() { 
+  state.playing = false; 
+  if (!isMobile) controls.unlock(); 
+  document.getElementById('deathScreen').style.display = 'flex'; 
+  document.getElementById('deathStats').innerHTML = `KILLS: ${state.kills}<br>WAVES SURVIVED: ${state.wave}`; 
+}
+
 function respawnPlayer() {
-  state.health = state.maxHealth; initAmmo(); state.isReloading = false; state.kills = 0; state.wave = 1;
-  state.damageAlpha = 0; state.regenDelay = 0; state.screenShake = 0; state.hitMarkerAlpha = 0;
-  state.currentCat = 0; state.currentIdx = [0, 0, 0, 0]; state.isSwitching = false;
-  state.canDoubleJump = true; state.canDash = true;
-  // FIX: Show correct weapon model on respawn
-  showOnlyWeapon(currentWeaponId()); updateSlotUI(); updateAbilityIndicators();
-  playerPos.set(0, 1.7, 24); state.velY = 0; camera.position.copy(playerPos);
-  spawnWave(1); announceWave(1); state.playing = true;
+  state.health = state.maxHealth; 
+  initAmmo(); 
+  state.isReloading = false; 
+  state.kills = 0; 
+  state.wave = 1;
+  state.damageAlpha = 0; 
+  state.regenDelay = 0; 
+  state.screenShake = 0; 
+  state.hitMarkerAlpha = 0;
+  state.currentCat = 0; 
+  state.currentIdx = [0, 0, 0, 0]; 
+  state.isSwitching = false;
+  state.canDoubleJump = true; 
+  state.canDash = true;
+  showOnlyWeapon(currentWeaponId()); 
+  updateSlotUI(); 
+  updateAbilityIndicators();
+  playerPos.set(0, 1.7, 24); 
+  state.velY = 0; 
+  camera.position.copy(playerPos);
+  spawnWave(1); 
+  announceWave(1); 
+  state.playing = true;
   document.getElementById('deathScreen').style.display = 'none';
-  if (isMobile) { document.getElementById('mobileControls').style.display = 'block'; resetSprint(); }
+  if (isMobile) { 
+    document.getElementById('mobileControls').style.display = 'block'; 
+    resetSprint(); 
+  }
 }
 
 /* ===== HUD UPDATE ===== */
@@ -1221,7 +1324,6 @@ function animate() {
     const isSprinting = keys.shift && ((keys.w || keys.a || keys.s || keys.d) || joyActive);
     const speed = (isSprinting && !state.isDashing ? state.sprintSpeed : state.moveSpeed) * delta;
 
-    // Mobile joystick movement
     if (joyActive) {
       const jx = joyPos.x, jy = joyPos.y;
       const jForward = forward.clone().multiplyScalar(-jy * speed * 1.5);
@@ -1232,7 +1334,6 @@ function animate() {
       if (!checkCollisionAt(playerPos.x, nz, 0.4)) playerPos.z = nz;
     }
 
-    // Keyboard movement
     if (!joyActive) {
       let mx = 0, mz = 0;
       if (keys.w) { mx += forward.x * speed; mz += forward.z * speed; }
@@ -1244,7 +1345,6 @@ function animate() {
       if (!checkCollisionAt(playerPos.x, nz, 0.4)) playerPos.z = nz;
     }
 
-    // Mobile look
     if (isMobile && (lookDelta.x !== 0 || lookDelta.y !== 0)) {
       camera.rotation.y -= lookDelta.x;
       camera.rotation.x -= lookDelta.y;
@@ -1252,7 +1352,6 @@ function animate() {
       lookDelta.x = 0; lookDelta.y = 0;
     }
 
-    // Dashing
     if (state.isDashing && state.dashDirection) {
       playerPos.x += state.dashDirection.x * 25 * delta;
       playerPos.z += state.dashDirection.z * 25 * delta;
@@ -1279,13 +1378,11 @@ function animate() {
     else { state.weaponBob += delta * 1.5; }
     const bobAmt = isMoving && !state.isDashing ? 0.015 : 0.004;
 
-    // Weapon switch animation
     if (state.isSwitching) {
       state.switchTimer -= delta;
       const prog = 1 - state.switchTimer / state.switchDuration;
       if (prog < 0.5) weaponMount.position.y = -0.18 - prog * 1.0;
       else weaponMount.position.y = -0.18 - (1 - prog) * 1.0;
-      // FIX: Ensure correct weapon is visible when switch completes
       if (state.switchTimer <= 0) { state.isSwitching = false; weaponMount.position.y = -0.18; showOnlyWeapon(currentWeaponId()); }
     } else if (!state.isDashing) {
       weaponMount.position.y = -0.18 + Math.sin(state.weaponBob) * bobAmt;
@@ -1296,13 +1393,11 @@ function animate() {
     weaponMount.position.z = -0.38 + state.weaponRecoil;
     weaponMount.rotation.x = -state.weaponRecoil * 3;
 
-    // Melee swing animation - FIX: don't run during dash or switch
     if (state.meleeSwing > 0 && !state.isDashing && !state.isSwitching) {
       state.meleeSwing -= delta * 4;
       weaponMount.rotation.x = -Math.sin(state.meleeSwing * Math.PI) * 0.8;
       weaponMount.position.x = 0.22 + Math.sin(state.meleeSwing * Math.PI) * 0.15;
     }
-    // Dash animation - FIX: don't run during switch
     if (state.isDashing && !state.isSwitching) {
       weaponMount.rotation.x = -Math.sin(Date.now() * 0.03) * 0.3;
       weaponMount.position.z = -0.38 + Math.sin(Date.now() * 0.05) * 0.05;
@@ -1364,9 +1459,22 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-document.addEventListener('mousedown', e => { if (e.button !== 0 || !state.playing || (!isMobile && !controls.isLocked)) return; const w = currentWeapon(); if (!w.auto && w.type === 'hitscan') playerShoot(); });
-window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+// FIX: Only trigger shooting on mousedown for non-auto weapons when pointer is locked
+document.addEventListener('mousedown', e => { 
+  if (e.button !== 0 || !state.playing) return;
+  // On desktop, only shoot if pointer is locked
+  if (!isMobile && !controls.isLocked) return;
+  const w = currentWeapon(); 
+  if (!w.auto && w.type === 'hitscan') playerShoot(); 
+});
+
+window.addEventListener('resize', () => { 
+  camera.aspect = window.innerWidth / window.innerHeight; 
+  camera.updateProjectionMatrix(); 
+  renderer.setSize(window.innerWidth, window.innerHeight); 
+});
+
 animate();
 </script>
 </body>
-</html> */
+</html>
