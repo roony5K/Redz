@@ -9,11 +9,11 @@
 :root{--bg:#0a0a0f;--accent:#ff3333;--friendly:#00ff88;--warning:#ffaa00;--text:#e0e0e0;--fd:'Rajdhani',sans-serif;--fm:'Share Tech Mono',monospace}
 *{margin:0;padding:0;box-sizing:border-box}
 body{overflow:hidden;background:#000;font-family:var(--fd);color:var(--text);touch-action:none;user-select:none;-webkit-user-select:none}
-body.desktop{cursor:none}
-body.desktop.pointer-unlocked{cursor:default}
-canvas{display:block}
+/* GUARANTEED CURSOR HIDING */
+body.desktop{cursor:none !important}
+body.desktop.unlocked{cursor:default !important}
+canvas{display:block;cursor:none !important}
 
-/* Screens */
 #startScreen{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,#1a3a5c,#0d1b2a)}
 #startScreen h1{font-size:clamp(40px,10vw,80px);font-weight:700;letter-spacing:6px;color:var(--accent);text-shadow:0 0 30px rgba(255,50,50,.5);margin-bottom:6px}
 #startScreen p.sub{font-size:16px;color:#8899aa;letter-spacing:3px;margin-bottom:30px;text-align:center;padding:0 20px}
@@ -46,7 +46,6 @@ canvas{display:block}
 .btn.secondary:hover{background:var(--friendly);color:#000}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 
-/* HUD */
 #hud{position:fixed;inset:0;z-index:10;pointer-events:none;display:none}
 #crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:22px;height:22px;transition:width .15s,height .15s}
 #crosshair::before,#crosshair::after{content:'';position:absolute;background:rgba(255,255,255,.85)}
@@ -93,14 +92,12 @@ canvas{display:block}
 #dashFillBar{position:absolute;bottom:105px;right:20px;width:90px;height:3px;background:rgba(255,255,255,.1);opacity:0;transition:opacity .3s}
 #dashFill{width:100%;height:100%;background:var(--warning);transition:width .1s}
 
-/* Death Screen */
 #deathScreen{position:fixed;inset:0;z-index:200;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,0,0,.85)}
 #deathScreen h2{font-size:clamp(40px,10vw,64px);font-weight:700;color:var(--accent);letter-spacing:5px;margin-bottom:12px;text-align:center}
 #deathStats{font-family:var(--fm);font-size:16px;color:#aaa;margin-bottom:28px;text-align:center;line-height:1.8;padding:0 20px}
 #respawnBtn{padding:10px 36px;font-family:var(--fd);font-size:16px;font-weight:700;letter-spacing:3px;border:2px solid var(--friendly);background:transparent;color:var(--friendly);cursor:pointer;transition:all .2s;pointer-events:all}
 #respawnBtn:hover{background:var(--friendly);color:#000}
 
-/* Mobile Controls */
 #mobileControls{position:fixed;inset:0;z-index:40;display:none;pointer-events:none}
 #joyZone{position:absolute;left:0;top:0;width:45%;height:100%;pointer-events:auto;touch-action:none;z-index:45}
 #joyBase{position:absolute;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.3);opacity:0;transition:opacity .2s;pointer-events:none;z-index:46}
@@ -113,10 +110,10 @@ canvas{display:block}
 #mbFire:active{background:rgba(255,51,51,.5)}
 #mbSprint.sprint-active{background:rgba(0,255,136,.4);border-color:var(--friendly);color:var(--friendly)}
 
-/* Pause Indicator */
-#pauseHint{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);padding:20px 40px;border:2px solid var(--accent);color:var(--text);font-family:var(--fd);font-size:18px;letter-spacing:2px;z-index:150;pointer-events:none;opacity:0;transition:opacity 0.3s}
+#pauseOverlay{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;flex-direction:column;pointer-events:auto;backdrop-filter:blur(2px)}
+#pauseOverlay h3{font-size:28px;color:var(--text);letter-spacing:3px;margin-bottom:15px}
+#pauseOverlay p{font-size:14px;color:#8899aa;letter-spacing:1px}
 
-/* Responsive */
 @media(max-width:600px){
   .controls-grid{font-size:11px;gap:4px 12px}
   .weapon-grid{grid-template-columns:1fr}
@@ -137,13 +134,12 @@ canvas{display:block}
 </head>
 <body>
 
-<!-- Start Screen -->
 <div id="startScreen">
   <h1>DEADZONE</h1>
   <p class="sub">TACTICAL ELIMINATION</p>
   <div class="controls-grid" id="desktopControls">
     <span class="key">W A S D</span><span>Move</span>
-    <span class="key">MOUSE</span><span>Aim</span>
+    <span class="key">MOUSE</span><span>Aim (Cursor Hidden)</span>
     <span class="key">L-CLICK</span><span>Fire / Use</span>
     <span class="key">1 2 3 4</span><span>Category</span>
     <span class="key">SCROLL / Q</span><span>Cycle</span>
@@ -164,7 +160,6 @@ canvas{display:block}
   <button id="startBtn">CLICK TO DEPLOY</button>
 </div>
 
-<!-- Weapon Selection -->
 <div id="weaponSelectScreen">
   <h2>WEAPON LOADOUT</h2>
   <p class="desc">Select one weapon from each category. Your choices determine your combat style.</p>
@@ -204,7 +199,6 @@ canvas{display:block}
   </div>
 </div>
 
-<!-- Mobile Controls Overlay -->
 <div id="mobileControls">
   <div id="joyZone"><div id="joyBase"></div><div id="joyStick"></div></div>
   <div id="lookZone"></div>
@@ -216,7 +210,11 @@ canvas{display:block}
   <div id="mbFire">FIRE</div>
 </div>
 
-<!-- HUD -->
+<div id="pauseOverlay">
+  <h3>PAUSED</h3>
+  <p>CLICK ANYWHERE TO RESUME</p>
+</div>
+
 <div id="hud">
   <div id="crosshair"><div class="cross-dot"></div></div>
   <div id="healthBar"><span id="healthIcon">+</span><div id="healthOuter"><div id="healthInner"></div></div><span id="healthText">100</span></div>
@@ -242,7 +240,6 @@ canvas{display:block}
   </div>
 </div>
 
-<!-- Death Screen -->
 <div id="deathScreen">
   <h2>ELIMINATED</h2>
   <div id="deathStats"></div>
@@ -257,10 +254,7 @@ import { PointerLockControls } from 'three/addons/controls/PointerLockControls.j
 const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 if (!isMobile) document.body.classList.add('desktop');
 
-/* ===== LOADOUT ===== */
 const loadout = { 0: 'rifle', 1: 'pistol', 2: 'fist', 3: 'molotov' };
-
-/* ===== AUDIO ===== */
 let audioCtx = null;
 function initAudio() { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {} }
 function playSound(type) {
@@ -337,7 +331,6 @@ function playSound(type) {
   } catch(e) {}
 }
 
-/* ===== WEAPONS ===== */
 const WEAPONS = {
   rifle:   { id:'rifle',   name:'M4 RIFLE',          cat:0, damage:22, fireRate:0.1,  magSize:30, startReserve:90,  range:100, spread:0.015, auto:true,  type:'hitscan', pellets:1, reloadTime:1.8, soundType:'rifle' },
   sniper:  { id:'sniper',  name:'AWP SNIPER',        cat:0, damage:85, fireRate:1.2,  magSize:5,  startReserve:20,  range:200, spread:0.002, auto:false, type:'hitscan', pellets:1, reloadTime:2.5, soundType:'sniper' },
@@ -352,7 +345,6 @@ const WEAPONS = {
 };
 const SLOTS = [['rifle','sniper','shotgun'],['pistol','smg','revolver'],['fist','scythe'],['molotov','medkit']];
 
-/* ===== STATE ===== */
 const state = {
   playing:false, health:100, maxHealth:100, kills:0, wave:1,
   isReloading:false, reloadTimer:0, shootCooldown:0,
@@ -377,7 +369,6 @@ const playerPos = new THREE.Vector3(0, 1.7, 24);
 const keys = { w:false, a:false, s:false, d:false, space:false, shift:false };
 let mouseDown = false;
 
-/* ===== THREE.JS ===== */
 const scene = new THREE.Scene();
 const skyC = document.createElement('canvas'); skyC.width = 2; skyC.height = 512;
 const skyX = skyC.getContext('2d');
@@ -397,27 +388,49 @@ renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadow
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.2;
 document.body.appendChild(renderer.domElement);
 
-// FIX: Initialize PointerLockControls with proper error handling
+// ===== BULLETPROOF POINTER LOCK =====
 const controls = new PointerLockControls(camera, document.body);
-
-// FIX: Add pointer lock error handling
-document.addEventListener('pointerlockerror', () => {
-  console.warn('Pointer lock failed - may require user gesture');
-  showNotification('Click the game to enable mouse look');
+document.addEventListener('pointerlockchange', () => {
+  if (document.pointerLockElement === document.body) {
+    // LOCKED: Hide cursor completely, remove pause overlay, enable shooting
+    document.body.classList.remove('unlocked');
+    document.body.style.cursor = 'none';
+    document.documentElement.style.cursor = 'none';
+    document.getElementById('pauseOverlay').style.display = 'none';
+    if (!state.playing) {
+      state.playing = true; 
+      document.getElementById('startScreen').style.display = 'none'; 
+      document.getElementById('weaponSelectScreen').style.display = 'none'; 
+      document.getElementById('hud').style.display = 'block'; 
+      document.getElementById('deathScreen').style.display = 'none';
+      if (bots.length === 0 && !waveTransition) { 
+        spawnWave(state.wave); 
+        announceWave(state.wave); 
+      }
+    }
+  } else {
+    // UNLOCKED: Show cursor, show pause overlay (if alive)
+    document.body.classList.add('unlocked');
+    document.body.style.cursor = 'default';
+    document.documentElement.style.cursor = 'default';
+    if (state.health > 0 && state.playing) {
+      document.getElementById('pauseOverlay').style.display = 'flex';
+    }
+  }
 });
 
-function showNotification(msg) {
-  const notif = document.createElement('div');
-  notif.style.cssText = `position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.9);color:var(--text);padding:12px 24px;border:2px solid var(--warning);font-family:var(--fd);font-size:14px;letter-spacing:1px;z-index:300;border-radius:4px;animation:fadeSlide 3s forwards`;
-  notif.textContent = msg;
-  document.body.appendChild(notif);
-  setTimeout(() => notif.remove(), 3000);
-}
+// Click to lock (only on desktop & when playing/unlocked)
+document.addEventListener('click', (e) => {
+  if (e.target.closest('button, .weapon-card, .mobBtn, #mbFire, #respawnBtn, .select-controls, #startScreen, #weaponSelectScreen, #deathScreen')) return;
+  if (!isMobile && !controls.isLocked && (state.playing || document.getElementById('pauseOverlay').style.display === 'flex')) {
+    controls.lock();
+  }
+}, { passive: true });
 
-// Add CSS animation for notifications
-const style = document.createElement('style');
-style.textContent = `@keyframes fadeSlide{0%{opacity:0;transform:translate(-50%,20px)}10%{opacity:1;transform:translate(-50%,0)}90%{opacity:1}100%{opacity:0;transform:translate(-50%,20px)}}`;
-document.head.appendChild(style);
+// Pause overlay click also requests lock
+document.getElementById('pauseOverlay').addEventListener('click', () => {
+  if (!isMobile && !controls.isLocked) controls.lock();
+});
 
 scene.add(new THREE.AmbientLight(0x8899bb, 1.0));
 scene.add(new THREE.HemisphereLight(0x87ceeb, 0x556644, 0.8));
@@ -429,7 +442,6 @@ dirLight.shadow.camera.left = -35; dirLight.shadow.camera.right = 35;
 dirLight.shadow.camera.top = 35; dirLight.shadow.camera.bottom = -35;
 dirLight.shadow.bias = -0.001; scene.add(dirLight);
 
-/* ===== COLLISION ===== */
 const colliders = []; const obstacleMeshes = [];
 function addCollider(minX, minY, minZ, maxX, maxY, maxZ) { colliders.push({ min: new THREE.Vector3(minX, minY, minZ), max: new THREE.Vector3(maxX, maxY, maxZ) }); }
 function checkCollisionAt(x, z, r) {
@@ -437,7 +449,6 @@ function checkCollisionAt(x, z, r) {
   return false;
 }
 
-/* ===== MAP ===== */
 const mapSize = 30;
 function makeGroundTexture() {
   const c = document.createElement('canvas'); c.width = 256; c.height = 256;
@@ -494,7 +505,6 @@ dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
 const dustParticles = new THREE.Points(dustGeo, new THREE.PointsMaterial({ color: 0xffffee, size: 0.05, transparent: true, opacity: 0.2 }));
 scene.add(dustParticles);
 
-/* ===== WEAPON MODELS ===== */
 const weaponModels = {};
 const gunMetal = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.6, roughness: 0.35 });
 const gunMetal2 = new THREE.MeshStandardMaterial({ color: 0x181818, metalness: 0.4, roughness: 0.5 });
@@ -619,7 +629,6 @@ weaponModels.medkit = createMedkitModel(); weaponMount.add(weaponModels.medkit);
 function showOnlyWeapon(id) { for (const [wid, model] of Object.entries(weaponModels)) model.visible = (wid === id); }
 showOnlyWeapon('rifle');
 
-/* ===== EFFECTS ===== */
 const activeParticles = [], activeTracers = [], activeGrenades = [], activeExplosions = [];
 function createHitParticles(pos, color) {
   for (let i = 0; i < 6; i++) {
@@ -685,7 +694,6 @@ function updateFireZones(delta, bots) {
   }
 }
 
-/* ===== PROJECTILE ===== */
 class Projectile {
   constructor(pos, dir, weaponId) {
     const w = WEAPONS[weaponId];
@@ -725,7 +733,6 @@ class Projectile {
   }
 }
 
-/* ===== BOT ===== */
 class Bot {
   constructor(pos, wave) {
     this.mesh = this.createMesh(); this.mesh.position.set(pos.x, 0, pos.z); scene.add(this.mesh);
@@ -821,7 +828,6 @@ class Bot {
   }
 }
 
-/* ===== BOT MANAGEMENT ===== */
 let bots = []; let waveTransition = false;
 function spawnWave(wave) {
   bots.forEach(b => { scene.remove(b.mesh); });
@@ -831,7 +837,6 @@ function spawnWave(wave) {
 }
 function announceWave(w) { const el = document.getElementById('waveAnnounce'); el.textContent = `WAVE ${w}`; el.style.opacity = '1'; setTimeout(() => { el.style.opacity = '0'; }, 2500); }
 
-/* ===== WEAPON SWITCHING ===== */
 function switchWeapon(cat, idx) {
   if (state.isSwitching || state.isReloading) return;
   if (cat === state.currentCat && idx === state.currentIdx[cat]) return;
@@ -871,7 +876,6 @@ function updateAbilityIndicators() {
   else { medEl.parentElement.style.opacity = '0.4'; }
 }
 
-/* ===== SHOOTING ===== */
 const shootRaycaster = new THREE.Raycaster();
 function playerShoot() {
   const w = currentWeapon();
@@ -945,7 +949,6 @@ function startReload() {
   state.isReloading = true; state.reloadTimer = w.reloadTime; playSound('reload');
 }
 
-/* ===== INPUT ===== */
 document.addEventListener('keydown', e => {
   if (e.code === 'KeyW') keys.w = true; if (e.code === 'KeyA') keys.a = true; if (e.code === 'KeyS') keys.s = true; if (e.code === 'KeyD') keys.d = true;
   if (e.code === 'Space') {
@@ -970,75 +973,24 @@ document.addEventListener('keyup', e => {
   }
   if (e.code === 'ShiftLeft') keys.shift = false;
 });
-document.addEventListener('mousedown', e => { if (e.button === 0) mouseDown = true; });
+
+document.addEventListener('mousedown', e => {
+  if (e.button !== 0 || !state.playing) return;
+  if (!isMobile && !controls.isLocked) return; // ONLY shoot when locked
+  mouseDown = true;
+  const w = currentWeapon();
+  if (!w.auto && w.type === 'hitscan') playerShoot();
+});
+
 document.addEventListener('mouseup', e => { if (e.button === 0) mouseDown = false; });
 document.addEventListener('contextmenu', e => e.preventDefault());
+
 document.addEventListener('wheel', e => {
   if (!state.playing) return;
   if (e.deltaY > 0) { let cat = state.currentCat, idx = state.currentIdx[cat]; idx++; if (idx >= SLOTS[cat].length) { idx = 0; cat = (cat + 1) % 4; } switchWeapon(cat, idx); }
   else { let cat = state.currentCat, idx = state.currentIdx[cat]; idx--; if (idx < 0) { cat = (cat + 3) % 4; idx = SLOTS[cat].length - 1; } switchWeapon(cat, idx); }
 });
 
-// FIX: Improved pointer lock event handlers
-controls.addEventListener('lock', () => {
-  // Hide cursor on desktop when locked
-  if (!isMobile) {
-    document.body.classList.remove('pointer-unlocked');
-  }
-  
-  if (!state.playing) {
-    state.playing = true; 
-    document.getElementById('startScreen').style.display = 'none'; 
-    document.getElementById('weaponSelectScreen').style.display = 'none'; 
-    document.getElementById('hud').style.display = 'block'; 
-    document.getElementById('deathScreen').style.display = 'none';
-    if (bots.length === 0 && !waveTransition) { 
-      spawnWave(state.wave); 
-      announceWave(state.wave); 
-    }
-  }
-});
-
-controls.addEventListener('unlock', () => {
-  // Show cursor on desktop when unlocked
-  if (!isMobile) {
-    document.body.classList.add('pointer-unlocked');
-  }
-  
-  // Only show pause hint if player is alive and intentionally paused (not death)
-  if (state.health > 0 && state.playing) {
-    // Remove any existing pause hint
-    const existing = document.getElementById('pauseHint');
-    if (existing) existing.remove();
-    
-    const pauseHint = document.createElement('div');
-    pauseHint.id = 'pauseHint';
-    pauseHint.textContent = 'PAUSED - CLICK TO RESUME';
-    document.body.appendChild(pauseHint);
-    
-    // Animate in
-    setTimeout(() => pauseHint.style.opacity = '1', 10);
-    
-    // Auto-hide after 2.5 seconds
-    setTimeout(() => {
-      pauseHint.style.opacity = '0';
-      setTimeout(() => pauseHint.remove(), 300);
-    }, 2500);
-  }
-});
-
-// FIX: Click handler to request pointer lock on desktop
-document.addEventListener('click', (e) => {
-  // Don't intercept clicks on buttons or UI elements
-  if (e.target.closest('button, .weapon-card, .mobBtn, #mbFire, #respawnBtn')) return;
-  
-  // Only request pointer lock on desktop when playing and not locked
-  if (!isMobile && state.playing && !controls.isLocked) {
-    controls.lock();
-  }
-}, { passive: true });
-
-/* ===== MOBILE CONTROLS ===== */
 const mobileControls = document.getElementById('mobileControls');
 const joyZone = document.getElementById('joyZone');
 const joyBase = document.getElementById('joyBase');
@@ -1052,7 +1004,6 @@ const mbReload = document.getElementById('mbReload');
 let joyActive = false, joyCenter = { x: 0, y: 0 }, joyPos = { x: 0, y: 0 };
 let lookTouchId = null, lastLookPos = { x: 0, y: 0 };
 let lookDelta = { x: 0, y: 0 };
-
 let sprintLocked = false;
 const resetSprint = () => { sprintLocked = false; keys.shift = false; if (mbSprint) { mbSprint.classList.remove('sprint-active'); } };
 
@@ -1144,7 +1095,6 @@ function initMobileControls() {
   mbReload.addEventListener('touchstart', e => { e.preventDefault();e.stopPropagation(); if (state.playing) startReload(); }, { passive: false });
 }
 
-/* ===== WEAPON SELECTION ===== */
 function initWeaponSelection() {
   const cards = document.querySelectorAll('.weapon-card');
   const confirmBtn = document.getElementById('confirmLoadoutBtn');
@@ -1183,8 +1133,8 @@ function initWeaponSelection() {
       } 
     }
     else {
-      // FIX: Request pointer lock after confirming loadout on desktop
-      controls.lock();
+      // DESKTOP: LOCK MOUSE IMMEDIATELY
+      setTimeout(() => controls.lock().catch(console.warn), 50);
     }
   });
 }
@@ -1203,8 +1153,7 @@ document.getElementById('startBtn').addEventListener('click', () => {
 document.getElementById('respawnBtn').addEventListener('click', () => { 
   respawnPlayer(); 
   if (!isMobile) {
-    // FIX: Re-request pointer lock after respawn on desktop
-    controls.lock();
+    setTimeout(() => controls.lock().catch(console.warn), 50);
   }
 });
 
@@ -1246,7 +1195,6 @@ function respawnPlayer() {
   }
 }
 
-/* ===== HUD UPDATE ===== */
 const minimapCanvas = document.getElementById('minimap');
 const minimapCtx = minimapCanvas.getContext('2d');
 
@@ -1311,7 +1259,6 @@ function drawMinimap() {
   ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1; ctx.strokeRect(0, 0, s, s);
 }
 
-/* ===== GAME LOOP ===== */
 const clock = new THREE.Clock();
 
 function animate() {
@@ -1458,15 +1405,6 @@ function animate() {
 
   renderer.render(scene, camera);
 }
-
-// FIX: Only trigger shooting on mousedown for non-auto weapons when pointer is locked
-document.addEventListener('mousedown', e => { 
-  if (e.button !== 0 || !state.playing) return;
-  // On desktop, only shoot if pointer is locked
-  if (!isMobile && !controls.isLocked) return;
-  const w = currentWeapon(); 
-  if (!w.auto && w.type === 'hitscan') playerShoot(); 
-});
 
 window.addEventListener('resize', () => { 
   camera.aspect = window.innerWidth / window.innerHeight; 
