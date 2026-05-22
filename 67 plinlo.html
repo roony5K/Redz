@@ -15,7 +15,7 @@
   #winScreen{background:rgba(5,5,15,0.96);display:none}
   .title{font-size:clamp(18px,5vw,44px);color:#c0b0e0;text-shadow:0 0 20px #6644aa,0 0 40px #4422aa;letter-spacing:4px;text-align:center}
   .subtitle{font-size:clamp(10px,2.5vw,16px);color:#8877aa;margin-top:8px;text-align:center;padding:0 20px}
-  .btn{padding:12px 32px;font-size:clamp(13px,3vw,20px);background:rgba(60,40,80,0.5);color:#c0b0d0;border:1px solid #6644aa;border-radius:4px;cursor:pointer;font-family:'Courier New',monospace;letter-spacing:2px;margin-top:20px;transition:all .2s}
+  .btn{padding:12px 32px;font-size:clamp(13px,3vw,20px);background:rgba(60,40,80,0.5);color:#c0b0d0;border:1px solid #6644aa;border-radius:4px;cursor:pointer;font-family:'Courier New',monospace;letter-spacing:1px;transition:all 0.2s}
   .btn:hover{background:rgba(80,50,120,0.6);box-shadow:0 0 15px rgba(100,68,170,0.4)}
   .levelNum{font-size:clamp(28px,7vw,56px);color:#c0b0e0;text-shadow:0 0 25px #6644aa}
   .levelName{font-size:clamp(12px,3vw,20px);color:#8877aa;margin-top:6px}
@@ -28,7 +28,7 @@
 
   /* Mobile controls */
   #mobileControls{position:fixed;top:0;left:0;width:100%;height:100%;z-index:20;pointer-events:none;display:none}
-  .mobileBtn{position:fixed;border-radius:50%;background:rgba(100,80,140,0.25);border:2px solid rgba(140,120,180,0.4);pointer-events:auto;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;transition:background .1s,border-color .1s;color:rgba(180,150,220,0.7);font-family:'Courier New',monospace;box-shadow:0 0 10px rgba(100,68,170,0.15)}
+  .mobileBtn{position:fixed;border-radius:50%;background:rgba(100,80,140,0.25);border:2px solid rgba(140,120,180,0.4);pointer-events:auto;display:flex;align-items:center;justify-content:center;-webkit-user-select:none;user-select:none;font-family:'Courier New',monospace;font-weight:bold;color:#c0b0d0;touch-action:manipulation}
   .mobileBtn:active,.mobileBtn.pressed{background:rgba(120,80,180,0.45);border-color:rgba(180,140,220,0.7);box-shadow:0 0 15px rgba(120,80,180,0.3)}
 
   /* Portrait */
@@ -106,6 +106,7 @@ const JUMP_BUF = 7;
 const AUTO_CD = 3;
 const TOTAL_LEVELS = 25;
 const SUB_STEPS = 3;
+const PORTAL_SIZE = 9;
 
 // === STATE ===
 let gameState = 'menu';
@@ -545,7 +546,7 @@ function update(){
   }
 
   // Portal check
-  if(hit(P,{x:portalPos.x,y:portalPos.y,w:5,h:5}))nextLevel();
+  if(hit(P,{x:portalPos.x-PORTAL_SIZE/2,y:portalPos.y-PORTAL_SIZE/2,w:PORTAL_SIZE,h:PORTAL_SIZE}))nextLevel();
 
   // Secret check
   for(const s of secrets){
@@ -790,24 +791,25 @@ function draw(){
 
   // Portal
   const pulse=Math.sin(frame*0.1)*0.3;
+  const portOff=PORTAL_SIZE/2;
   // Outer glow
   ctx.fillStyle=`rgba(80,255,120,${0.06+pulse*0.04})`;
-  ctx.fillRect(portalPos.x-3,portalPos.y-3,11,11);
+  ctx.fillRect(portalPos.x-portOff-3,portalPos.y-portOff-3,PORTAL_SIZE+6,PORTAL_SIZE+6);
   // Mid glow
   ctx.fillStyle=`rgba(80,255,120,${0.15+pulse*0.08})`;
-  ctx.fillRect(portalPos.x-2,portalPos.y-2,9,9);
+  ctx.fillRect(portalPos.x-portOff-2,portalPos.y-portOff-2,PORTAL_SIZE+4,PORTAL_SIZE+4);
   // Core
   ctx.fillStyle=`rgba(80,255,120,${0.4+pulse*0.15})`;
-  ctx.fillRect(portalPos.x-1,portalPos.y-1,7,7);
+  ctx.fillRect(portalPos.x-portOff-1,portalPos.y-portOff-1,PORTAL_SIZE+2,PORTAL_SIZE+2);
   ctx.fillStyle=`rgba(80,255,120,${0.6+pulse*0.2})`;
-  ctx.fillRect(portalPos.x,portalPos.y,5,5);
+  ctx.fillRect(portalPos.x-portOff,portalPos.y-portOff,PORTAL_SIZE,PORTAL_SIZE);
   ctx.fillStyle=`rgba(160,255,200,${0.75+pulse*0.2})`;
-  ctx.fillRect(portalPos.x+1,portalPos.y+1,3,3);
+  ctx.fillRect(portalPos.x-portOff+2,portalPos.y-portOff+2,PORTAL_SIZE-4,PORTAL_SIZE-4);
   // Spinning dots
   for(let i=0;i<4;i++){
     const a=frame*0.07+i*Math.PI/2;
-    const rx=portalPos.x+2.5+Math.cos(a)*4;
-    const ry=portalPos.y+2.5+Math.sin(a)*4;
+    const rx=portalPos.x+Math.cos(a)*(PORTAL_SIZE/2+2);
+    const ry=portalPos.y+Math.sin(a)*(PORTAL_SIZE/2+2);
     ctx.fillStyle=`rgba(120,255,150,${0.3+pulse*0.15})`;
     ctx.fillRect(Math.floor(rx),Math.floor(ry),1,1);
   }
