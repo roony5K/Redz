@@ -107,6 +107,7 @@ const AUTO_CD = 3;
 const TOTAL_LEVELS = 25;
 const SUB_STEPS = 3;
 const PORTAL_SIZE = 9;
+const PORTAL_HITBOX_SIZE = 14;
 
 // === STATE ===
 let gameState = 'menu';
@@ -546,7 +547,7 @@ function update(){
   }
 
   // Portal check
-  if(hit(P,{x:portalPos.x-PORTAL_SIZE/2,y:portalPos.y-PORTAL_SIZE/2,w:PORTAL_SIZE,h:PORTAL_SIZE}))nextLevel();
+  if(hit(P,{x:portalPos.x-PORTAL_HITBOX_SIZE/2,y:portalPos.y-PORTAL_HITBOX_SIZE/2,w:PORTAL_HITBOX_SIZE,h:PORTAL_HITBOX_SIZE}))nextLevel();
 
   // Secret check
   for(const s of secrets){
