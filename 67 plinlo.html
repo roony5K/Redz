@@ -1,1 +1,492 @@
 Theme / Setting: its like grass land then desert than ice lands and the last and most hard one nether                  Character: u can decide acording the theme      Level style :single pixle single screen       Number of levels:30         Visual style:mine craft style textures             Controls: mobile and ketbord and mouse         Pickups / Power-ups: nothin         Win / Lose conditions reach the end/portal            Any other must-have feature: mechnics like troll spike(invisable spike only shows when u r on top of it and insta kill)  lava,slipry ice blocks and cactus and wether mechnice : wind (pushes player for war d or back acoording to level condition and yes it increses speed and makes the jump laste longer/more block) ,, thunder storm(makes the blue sky into grey and strikes on selected block and insta kill) for nether i dont have any mechnics planned so yea if u have qestions ask me 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pixel Block Obby</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background-color: #111; overflow: hidden;
+            touch-action: manipulation; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            display: flex; justify-content: center; align-items: center; height: 100vh;
+        }
+        canvas { display: block; image-rendering: pixelated; touch-action: none; border: 4px solid #222; }
+
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+            background: rgba(0, 0, 0, 0.9); z-index: 100; color: white; padding: 20px;
+        }
+        .screen.active { display: flex; }
+        h1, h2 { text-shadow: 3px 3px 0 #000; margin-bottom: 20px; text-align: center; }
+        h1 { font-size: 48px; } h2 { font-size: 36px; }
+
+        button {
+            font-family: inherit; font-size: 28px; font-weight: bold; padding: 15px 40px;
+            border: none; border-radius: 10px; cursor: pointer; color: #fff; text-shadow: 2px 2px 0 #000;
+            border-bottom: 5px solid rgba(0,0,0,0.3); margin: 8px; background-color: #4CAF50; touch-action: manipulation;
+        }
+        button:active { border-bottom: 2px solid rgba(0,0,0,0.3); transform: translateY(3px); }
+        .btn-red { background-color: #f44336; } .btn-blue { background-color: #2196F3; } .btn-grey { background-color: #607D8B; }
+
+        .level-grid-container {
+            width: 90%; max-width: 400px; height: 50vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+            background: rgba(0,0,0,0.4); border-radius: 12px; padding: 15px; border: 2px solid rgba(255,255,255,0.2); margin: 10px 0;
+        }
+        .level-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+        .level-btn {
+            aspect-ratio: 1; font-size: 24px; display: flex; justify-content: center; align-items: center;
+            background-color: #4CAF50; color: white; border-radius: 8px; border-bottom: 4px solid rgba(0,0,0,0.3); padding: 0;
+        }
+        .level-btn:active { border-bottom: 2px solid rgba(0,0,0,0.3); transform: translateY(2px); }
+
+        .setting-row { display: flex; justify-content: space-between; align-items: center; width: 80%; max-width: 300px; margin: 10px 0; font-size: 28px; }
+        .toggle-switch { width: 60px; height: 30px; background-color: #555; border-radius: 15px; position: relative; cursor: pointer; border-bottom: none; }
+        .toggle-switch.active { background-color: #4CAF50; }
+        .toggle-knob { width: 26px; height: 26px; background-color: white; border-radius: 50%; position: absolute; top: 2px; left: 2px; transition: 0.2s; }
+        .toggle-switch.active .toggle-knob { left: 32px; }
+
+        #hud { position: absolute; top: 20px; left: 20px; right: 20px; display: none; justify-content: space-between; align-items: center; z-index: 50; }
+        #level-text { color: #fff; font-size: 32px; font-weight: bold; text-shadow: 3px 3px 0 #000; }
+        #wind-text { color: #00bcd4; font-size: 24px; font-weight: bold; text-shadow: 2px 2px 0 #000; display: none; }
+        #pause-btn { font-size: 28px; padding: 10px 20px; margin: 0; }
+
+        #mobile-controls { position: absolute; bottom: 0; left: 0; width: 100%; height: 180px; display: none; z-index: 60; }
+        .touch-btn {
+            position: absolute; width: 90px; height: 90px; background: rgba(255,255,255,0.3); border: 4px solid rgba(255,255,255,0.6);
+            border-radius: 50%; color: #fff; font-size: 35px; font-weight: bold; display: flex; justify-content: center; align-items: center;
+            user-select: none; -webkit-user-select: none; touch-action: none;
+        }
+        #left-btn { left: 30px; bottom: 40px; } #right-btn { left: 150px; bottom: 40px; }
+        #jump-btn { right: 30px; bottom: 40px; width: 120px; height: 90px; border-radius: 45px; font-size: 28px; }
+
+        #unlock-popup {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9); color: #FFEB3B; font-size: 36px; font-weight: bold;
+            padding: 20px; border-radius: 12px; text-shadow: 3px 3px 0 #000; border: 4px solid #FFEB3B;
+            display: none; z-index: 200; text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="game"></canvas>
+
+    <div id="menu-screen" class="screen active">
+        <h1>PIXEL BLOCK OBBY</h1>
+        <button onclick="handlePlayClick()">PLAY</button>
+        <button class="btn-blue" onclick="showScreen('level-screen')">LEVELS</button>
+        <button class="btn-grey" onclick="showScreen('settings-screen')">SETTINGS</button>
+    </div>
+    <div id="level-screen" class="screen">
+        <h2>SELECT LEVEL</h2>
+        <div class="level-grid-container"><div class="level-grid" id="level-grid-inner"></div></div>
+        <button class="btn-grey" onclick="goBackFromLevels()">BACK</button>
+    </div>
+    <div id="settings-screen" class="screen">
+        <h2>SETTINGS</h2>
+        <div class="setting-row"><span>Music</span><div class="toggle-switch active" onclick="toggleSetting(this)"><div class="toggle-knob"></div></div></div>
+        <div class="setting-row"><span>Sound</span><div class="toggle-switch active" onclick="toggleSetting(this)"><div class="toggle-knob"></div></div></div>
+        <button class="btn-red" onclick="handleResetClick()" style="margin-top: 30px;">RESET PROGRESS</button>
+        <button class="btn-grey" onclick="goBackFromSettings()">BACK</button>
+    </div>
+    <div id="pause-screen" class="screen">
+        <h2>PAUSED</h2>
+        <button onclick="resumeGame()">RESUME</button>
+        <button class="btn-blue" onclick="showScreen('level-screen')">LEVELS</button>
+        <button class="btn-grey" onclick="showScreen('settings-screen')">SETTINGS</button>
+        <button class="btn-red" onclick="returnToMenu()">MAIN MENU</button>
+    </div>
+
+    <div id="hud">
+        <div id="level-text">LEVEL 1</div>
+        <div id="wind-text">💨 WIND ➔</div>
+        <button id="pause-btn" class="btn-grey" onclick="pauseGame()">❚❚</button>
+    </div>
+    <div id="unlock-popup"></div>
+
+    <div id="mobile-controls">
+        <div id="left-btn" class="touch-btn">◀</div>
+        <div id="right-btn" class="touch-btn">▶</div>
+        <div id="jump-btn" class="touch-btn">JUMP</div>
+    </div>
+
+<script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    
+    const GAME_W = 800;
+    const GAME_H = 600;
+    canvas.width = GAME_W;
+    canvas.height = GAME_H;
+
+    function resize() {
+        let scale = Math.min(window.innerWidth / GAME_W, window.innerHeight / GAME_H);
+        canvas.style.width = (GAME_W * scale) + 'px';
+        canvas.style.height = (GAME_H * scale) + 'px';
+    }
+    window.addEventListener('resize', resize); resize();
+
+    const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    let state = 'MENU'; let previousState = 'MENU'; 
+    let currentLevel = 1;
+    let maxLevel = 10; 
+
+    const B = 32; 
+    // --- APPROVED TIGHT PHYSICS ---
+    const GRAVITY = 0.7;
+    const JUMP_FORCE = -12.0;
+    const SPEED = 5.0;
+    const WALL_JUMP_X = 7;
+    const WIND_FORCE = 0.25; // Pushes player right
+
+    let keys = { left: false, right: false, jump: false, jumpPressed: false };
+
+    function createEntity() {
+        return { x:0, y:0, w:24, h:28, vx:0, vy:0, grounded:false, onWall:0, alive:true, canJump:true, hasWallClimb:false, standingOn:'grass', scaleX:1, scaleY:1, targetScaleX:1, targetScaleY:1 };
+    }
+    let player = createEntity();
+    let ghost = createEntity(); ghost.hasWallClimb = true;
+    let levelBlocks = [], menuBlocks = [];
+    let particles = [];
+    let windParticles = [];
+    for(let i=0; i<30; i++) windParticles.push({x: Math.random()*GAME_W, y: Math.random()*GAME_H, speed: 10+Math.random()*10});
+
+    // --- HAZARD LOGIC ---
+    let lightningTimer = 0;
+    let lightningPhase = 0; 
+    let rainDrops = [];
+    for(let i=0; i<100; i++) rainDrops.push({x: Math.random()*GAME_W, y: Math.random()*GAME_H, speed: 5+Math.random()*5});
+
+    // --- UI LOGIC ---
+    function showScreen(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); document.getElementById(id).classList.add('active'); if(id === 'level-screen') populateLevelGrid(); }
+    function populateLevelGrid() {
+        const container = document.getElementById('level-grid-inner'); container.innerHTML = '';
+        for(let i=1; i<=10; i++) {
+            let btn = document.createElement('button');
+            btn.className = 'level-btn';
+            btn.innerText = i;
+            btn.onclick = () => { currentLevel = i; startGame(i); };
+            container.appendChild(btn);
+        }
+    }
+    function handlePlayClick() { currentLevel = 1; startGame(currentLevel); }
+    function handleResetClick() { maxLevel = 10; alert("Progress Reset!"); populateLevelGrid(); }
+    function toggleSetting(el) { el.classList.toggle('active'); }
+    function goBackFromLevels() { if(state === 'PAUSED') showScreen('pause-screen'); else showScreen('menu-screen'); }
+    function goBackFromSettings() { if(state === 'PAUSED' || previousState === 'PAUSED') showScreen('pause-screen'); else showScreen('menu-screen'); }
+    function pauseGame() { state = 'PAUSED'; previousState = 'PAUSED'; showScreen('pause-screen'); if(isMobile) document.getElementById('mobile-controls').style.display = 'none'; }
+    function resumeGame() { state = 'PLAYING'; document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); if(isMobile) document.getElementById('mobile-controls').style.display = 'block'; }
+    function returnToMenu() { state = 'MENU'; previousState = 'MENU'; showScreen('menu-screen'); document.getElementById('hud').style.display = 'none'; if(isMobile) document.getElementById('mobile-controls').style.display = 'none'; ghost.x=50; ghost.y=400; }
+
+    // --- LEVEL DATA (EXACT BLUEPRINTS) ---
+    function g(x, y, type) { return {x: x*B, y: y*B, w:B, h:B, type: type, origType: type, timer: 0}; }
+    function portal(x, y) { return {x: x*B, y: y*B, w:B, h:B*3, type: 'portal', origType: 'portal', timer:0}; }
+    function row(x1, x2, y, type) { let b=[]; for(let i=x1; i<=x2; i++) b.push(g(i, y, type)); return b; }
+
+    const levelsData = [
+        // L1
+        () => [...row(0, 4, 17, 'grass'), g(7, 17, 'grass'), g(8, 17, 'grass'), g(9, 17, 'grass'), g(12, 16, 'grass'), g(16, 17, 'grass'), ...row(19, 24, 17, 'grass'), portal(22, 14)],
+        // L2
+        () => [...row(0, 3, 17, 'grass'), g(6, 15, 'grass'), g(10, 13, 'grass'), g(11, 13, 'grass'), g(14, 16, 'grass'), g(17, 17, 'grass'), ...row(19, 24, 17, 'grass'), portal(22, 14)],
+        // L3
+        () => [...row(0, 3, 17, 'grass'), g(6, 15, 'grass'), g(9, 13, 'grass'), g(10, 13, 'grass'), g(11, 11, 'grass'), g(14, 11, 'grass'), g(17, 15, 'grass'), ...row(19, 24, 17, 'grass'), portal(22, 14)],
+        // L4
+        () => [...row(0, 3, 17, 'grass'), g(4, 17, 'trigger'), g(5, 17, 'spike'), g(6, 17, 'grass'), g(9, 15, 'grass'), g(13, 17, 'trigger'), g(14, 17, 'spike'), g(15, 17, 'grass'), g(18, 15, 'grass'), g(21, 17, 'trigger'), g(22, 17, 'spike'), g(23, 17, 'grass'), portal(23, 14)],
+        // L5
+        () => [...row(0, 3, 17, 'grass'), g(4, 17, 'lava'), g(5, 17, 'lava'), g(6, 15, 'lightning'), g(7, 15, 'grass'), g(8, 17, 'lava'), g(9, 17, 'lava'), g(10, 17, 'grass'), g(11, 17, 'lightning'), g(12, 17, 'lava'), g(13, 17, 'lava'), g(14, 15, 'grass'), g(15, 15, 'lightning'), g(16, 15, 'grass'), g(17, 17, 'trigger'), g(18, 17, 'spike'), ...row(19, 24, 17, 'grass'), portal(22, 14)],
+        // L6 (Lightning Row + Troll)
+        () => [...row(0, 3, 17, 'grass'), g(4, 17, 'lightning'), g(5, 17, 'grass'), g(6, 17, 'lightning'), g(7, 17, 'grass'), g(8, 17, 'lightning'), g(9, 17, 'grass'), g(10, 17, 'lightning'), g(11, 17, 'grass'), g(12, 17, 'lightning'), g(13, 17, 'grass'), g(14, 17, 'grass'), g(15, 17, 'grass'), g(16, 17, 'trigger'), g(17, 17, 'spike'), g(18, 17, 'grass'), g(19, 17, 'grass'), portal(22, 14)],
+        // L7 (Lava Stepping Stones + Troll)
+        () => [...row(0, 3, 17, 'grass'), g(4, 17, 'lava'), g(5, 15, 'dirt'), g(6, 17, 'lava'), g(7, 15, 'dirt'), g(8, 17, 'lava'), g(9, 15, 'dirt'), g(10, 17, 'lava'), g(11, 15, 'dirt'), g(12, 17, 'lava'), g(13, 15, 'dirt'), g(14, 17, 'lava'), g(15, 15, 'dirt'), ...row(16, 17, 17, 'grass'), g(18, 17, 'trigger'), g(19, 17, 'spike'), ...row(20, 24, 17, 'grass'), portal(22, 14)],
+        // L8 (Wind Tunnel)
+        () => [...row(0, 3, 17, 'grass'), g(4, 17, 'lava'), g(5, 17, 'lava'), ...row(6, 8, 17, 'grass'), g(9, 17, 'lava'), g(10, 17, 'grass'), g(11, 17, 'grass'), g(12, 17, 'lava'), ...row(13, 18, 17, 'grass'), portal(22, 14)],
+        // L9 (High Altitude + Troll)
+        () => [...row(0, 3, 17, 'grass'), g(4, 15, 'dirt'), g(4, 14, 'grass'), g(7, 14, 'trigger'), g(8, 14, 'spike'), g(10, 14, 'dirt'), g(10, 13, 'grass'), ...row(13, 18, 17, 'grass'), portal(22, 14)],
+        // L10 (The Gauntlet)
+        () => [...row(0, 3, 17, 'grass'), g(4, 17, 'lava'), g(5, 17, 'lava'), g(6, 17, 'lightning'), g(7, 17, 'grass'), g(8, 17, 'lava'), g(9, 17, 'lava'), g(10, 17, 'grass'), g(11, 17, 'trigger'), g(12, 17, 'spike'), g(13, 17, 'lava'), g(14, 17, 'grass'), g(15, 17, 'grass'), g(16, 17, 'trigger'), g(17, 17, 'spike'), g(18, 17, 'grass'), portal(22, 14)]
+    ];
+
+    function generateBlocks(lvl) {
+        if(lvl <= 10) return levelsData[lvl-1]();
+        let b = []; for(let i=0; i<25; i++) b.push(g(i, 17, 'grass')); b.push(portal(22, 14)); return b;
+    }
+
+    // --- GAME LOGIC ---
+    function startGame(lvl) {
+        state = 'PLAYING';
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById('hud').style.display = 'flex';
+        document.getElementById('level-text').innerText = "LEVEL " + lvl;
+        if(isMobile) document.getElementById('mobile-controls').style.display = 'block';
+
+        player.hasWallClimb = false; 
+        levelBlocks = generateBlocks(lvl);
+        lightningTimer = 0; lightningPhase = 0;
+        player.x = B*2; player.y = 16*B - player.h; 
+        player.vx = 0; player.vy = 0; player.alive = true; player.grounded = false; player.canJump = true;
+        
+        // Wind UI
+        if(lvl === 8 || lvl === 10) document.getElementById('wind-text').style.display = 'block';
+        else document.getElementById('wind-text').style.display = 'none';
+    }
+
+    function respawn(entity) {
+        entity.x = B*2; entity.y = 16*B - entity.h; 
+        entity.vx = 0; entity.vy = 0; entity.alive = true; entity.grounded = false; entity.canJump = true;
+        for(let b of levelBlocks) { if(b.origType === 'spike') b.type = 'spike'; b.timer = 0; }
+    }
+
+    function spawnParticles(x, y, color, count) { for(let i=0; i<count; i++) { particles.push({ x, y, vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4 - 1, life: 15+Math.random()*15, color, size: 3+Math.random()*3 }); } }
+
+    function doJump(entity) {
+        if(!entity.canJump) return;
+        if(entity.grounded) {
+            entity.vy = JUMP_FORCE; entity.grounded = false; entity.canJump = false;
+            entity.targetScaleX = 0.6; entity.targetScaleY = 1.4;
+            if(entity === player) spawnParticles(entity.x+entity.w/2, entity.y+entity.h, '#fff', 4);
+        } else if(entity.onWall !== 0) {
+            entity.vy = JUMP_FORCE; entity.vx = WALL_JUMP_X * -entity.onWall; entity.onWall = 0; entity.canJump = false;
+            entity.targetScaleX = 0.6; entity.targetScaleY = 1.4;
+            if(entity === player) spawnParticles(entity.x + (entity.onWall > 0 ? entity.w : 0), entity.y+entity.h/2, '#8B5A2B', 6);
+        }
+    }
+
+    function updateEntity(entity, blocks) {
+        if(!entity.alive) return;
+
+        if(entity === ghost) {
+            entity.vx = SPEED;
+            let wallAhead = false, groundAhead = false;
+            for(let b of blocks) {
+                if(b.type !== 'grass' && b.type !== 'dirt') continue;
+                if(b.x >= entity.x + entity.w && b.x < entity.x + entity.w + 15 && b.y < entity.y + entity.h && b.y + b.h > entity.y) wallAhead = true;
+                if(b.x > entity.x + entity.w && b.x < entity.x + B*4 && b.y > entity.y) groundAhead = true;
+            }
+            if((wallAhead || !groundAhead) && entity.grounded) doJump(entity);
+            if(entity.onWall !== 0) doJump(entity);
+            if(entity.x > GAME_W) { entity.x = 0; entity.y = 16*B - entity.h; entity.vx = SPEED; entity.vy = 0; entity.grounded = false; }
+        } else {
+            if(keys.left) entity.vx = -SPEED;
+            else if(keys.right) entity.vx = SPEED;
+            else { entity.vx *= 0.6; }
+            if(keys.jumpPressed) { doJump(entity); keys.jumpPressed = false; }
+            if(entity.x < 0) entity.x = 0;
+            if(entity.x + entity.w > GAME_W) entity.x = GAME_W - entity.w;
+            
+            // Wind Logic
+            if((currentLevel === 8 || currentLevel === 10) && !entity.grounded) {
+                entity.vx += WIND_FORCE;
+            }
+        }
+
+        entity.vy += GRAVITY;
+        if(entity.vy > 16) entity.vy = 16;
+
+        entity.onWall = 0;
+        if(!entity.grounded && entity.hasWallClimb) {
+            let pressing = (keys.left || keys.right || entity === ghost);
+            if(pressing) {
+                if(checkWall(entity, -1, blocks)) entity.onWall = -1;
+                if(checkWall(entity, 1, blocks)) entity.onWall = 1;
+                if(entity.onWall !== 0 && entity.vy > 0) { entity.vy = 2.5; entity.canJump = true; }
+            }
+        }
+
+        entity.x += entity.vx; checkCollision(entity, blocks, 'x');
+        let wasInAir = !entity.grounded;
+        entity.y += entity.vy; entity.grounded = false; entity.standingOn = 'air'; checkCollision(entity, blocks, 'y');
+
+        if(entity.grounded && wasInAir && entity === player) {
+            entity.targetScaleX = 1.3; entity.targetScaleY = 0.7;
+            spawnParticles(entity.x+entity.w/2, entity.y+entity.h, '#fff', 5);
+        }
+
+        if(entity.y > GAME_H + 100) { entity.alive = false; setTimeout(() => respawn(entity), 500); }
+
+        entity.scaleX += (entity.targetScaleX - entity.scaleX) * 0.2;
+        entity.scaleY += (entity.targetScaleY - entity.scaleY) * 0.2;
+        entity.targetScaleX += (1 - entity.targetScaleX) * 0.2;
+        entity.targetScaleY += (1 - entity.targetScaleY) * 0.2;
+    }
+
+    function checkWall(entity, dir, blocks) {
+        for(let b of blocks) {
+            if(b.type !== 'grass' && b.type !== 'dirt') continue;
+            if(entity.y + entity.h > b.y + 4 && entity.y < b.y + b.h - 4) {
+                if(dir === -1 && entity.x <= b.x + b.w && entity.x + entity.w >= b.x + b.w) return true;
+                if(dir === 1 && entity.x + entity.w >= b.x && entity.x <= b.x) return true;
+            }
+        } return false;
+    }
+
+    function checkCollision(entity, blocks, axis) {
+        for(let b of blocks) {
+            if(rectCollide(entity, b)) {
+                if(b.type === 'lava') { entity.alive = false; setTimeout(() => respawn(entity), 500); return; }
+                if(b.type === 'portal' && entity === player) { nextLevel(); return; }
+                if(b.type === 'spike_up') { entity.alive = false; setTimeout(() => respawn(entity), 500); return; }
+                
+                if(b.type === 'trigger' && axis === 'y' && entity.vy >= 0) { 
+                    for(let s of blocks) {
+                        if(s.origType === 'spike' && Math.abs(s.x - b.x) === B && s.y === b.y) {
+                            s.type = 'spike_up'  s.timer = 90;
+                        }
+                    }
+                }
+
+                if(axis === 'x') { if(entity.vx > 0) { entity.x = b.x - entity.w; entity.vx = 0; } else if(entity.vx < 0) { entity.x = b.x + b.w; entity.vx = 0; } }
+                if(axis === 'y') { 
+                    if(entity.vy > 0) { entity.y = b.y - entity.h; entity.vy = 0; entity.grounded = true; entity.canJump = true; entity.standingOn = b.type; } 
+                    else if(entity.vy < 0) { entity.y = b.y + b.h; entity.vy = 0; } 
+                }
+            }
+        }
+    }
+
+    function rectCollide(r1, r2) { return r1.x < r2.x + r2.w && r1.x + r1.w > r2.x && r1.y < r2.y + r2.h && r1.y + r1.h > r2.y; }
+
+    function nextLevel() {
+        currentLevel++;
+        if(currentLevel > 10) { alert("You beat Levels 1-10!"); returnToMenu(); return; }
+        startGame(currentLevel);
+    }
+
+    // --- DRAWING ---
+    function drawBlock(b) {
+        let x = b.x; let y = b.y;
+        if(b.type === 'grass') { ctx.fillStyle = '#8B5A2B'; ctx.fillRect(x, y, B, B); ctx.fillStyle = '#4CAF50'; ctx.fillRect(x, y, B, 8); ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.strokeRect(x, y, B, B); ctx.fillStyle = '#3E8E41'; ctx.fillRect(x+4, y+2, 2, 6); ctx.fillRect(x+12, y+4, 2, 4); ctx.fillRect(x+24, y+1, 2, 7); }
+        else if(b.type === 'dirt') { ctx.fillStyle = '#8B5A2B'; ctx.fillRect(x, y, B, B); ctx.fillStyle = '#6D4C2A'; ctx.fillRect(x+8, y+12, 4, 4); ctx.fillRect(x+20, y+6, 4, 4); ctx.fillRect(x+14, y+22, 4, 4); ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.strokeRect(x, y, B, B); }
+        else if(b.type === 'lava') { 
+            ctx.fillStyle = '#FF5722'; ctx.fillRect(x, y, B, B); 
+            ctx.fillStyle = '#FFEB3B'; 
+            let off = Math.sin(Date.now() / 200 + b.x) * 3;
+            ctx.fillRect(x+6, y+6+off, 8, 8); ctx.fillRect(x+18, y+14-off, 6, 6); 
+        }
+        else if(b.type === 'trigger') { ctx.fillStyle = '#8B5A2B'; ctx.fillRect(x, y, B, B); ctx.fillStyle = '#4CAF50'; ctx.fillRect(x, y, B, 8); ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.strokeRect(x, y, B, B); }
+        else if(b.type === 'spike') { ctx.fillStyle = '#8B5A2B'; ctx.fillRect(x, y, B, B); ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.strokeRect(x, y, B, B); }
+        else if(b.type === 'spike_up') { 
+            ctx.fillStyle = '#8B5A2B'; ctx.fillRect(x, y, B, B);
+            ctx.fillStyle = '#D32F2F'; ctx.beginPath(); ctx.moveTo(x+B/2, y+4); ctx.lineTo(x+4, y+B); ctx.lineTo(x+B-4, y+B); ctx.fill();
+            ctx.fillStyle = '#F44336'; ctx.beginPath(); ctx.moveTo(x+B/2, y+10); ctx.lineTo(x+10, y+B); ctx.lineTo(x+B-10, y+B); ctx.fill();
+        }
+        else if(b.type === 'lightning') { 
+            ctx.fillStyle = '#757575'; ctx.fillRect(x, y, B, B); ctx.fillStyle = '#9E9E9E'; ctx.fillRect(x+4, y+4, B-8, B-8); 
+            if(lightningPhase === 1) { ctx.fillStyle = 'rgba(255, 235, 59, 0.5)'; ctx.fillRect(x, y, B, B); } 
+            if(lightningPhase === 2) { ctx.fillStyle = '#FFF'; ctx.fillRect(x, y, B, B); ctx.fillStyle = '#FFEB3B'; ctx.fillRect(x+8, y+2, 16, 4); ctx.fillRect(x+12, y+6, 8, 6); ctx.fillRect(x+10, y+12, 12, 4); ctx.fillRect(x+14, y+16, 4, 14); } 
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.strokeRect(x, y, B, B);
+        }
+        else if(b.type === 'portal') { ctx.fillStyle = '#9C27B0'; ctx.fillRect(x, y, B, B*3); ctx.fillStyle = '#E1BEE7'; ctx.fillRect(x+6, y+6, B-12, B-12); ctx.fillRect(x+6, y+B+6, B-12, B-12); ctx.fillRect(x+6, y+B+B+6, B-12, B-12); }
+    }
+
+    function drawEntity(entity, color) {
+        let x = entity.x; let y = entity.y;
+        ctx.save(); ctx.translate(x + entity.w/2, y + entity.h); ctx.scale(entity.scaleX, entity.scaleY);
+        ctx.fillStyle = color; ctx.fillRect(-entity.w/2, -entity.h, entity.w, entity.h);
+        ctx.fillStyle = '#FFF'; ctx.fillRect(-7, -entity.h+6, 5, 5); ctx.fillRect(2, -entity.h+6, 5, 5);
+        ctx.fillStyle = '#000'; ctx.fillRect(-6, -entity.h+8, 2, 2); ctx.fillRect(3, -entity.h+8, 2, 2);
+        ctx.restore();
+    }
+
+    function loop() {
+        ctx.clearRect(0, 0, GAME_W, GAME_H);
+        
+        // Lightning Logic
+        if(state === 'PLAYING' && (currentLevel === 5 || currentLevel === 6 || currentLevel === 10)) {
+            lightningTimer += 1/60;
+            if(lightningTimer < 3.0) lightningPhase = 0;
+            else if(lightningTimer < 3.5) lightningPhase = 1; 
+            else if(lightningTimer < 4.0) { 
+                lightningPhase = 2; 
+                if(player.grounded && player.standingOn === 'lightning' && player.alive) {
+                    player.alive = false; setTimeout(() => respawn(player), 500);
+                }
+            }
+            else { lightningTimer = 0; lightningPhase = 0; }
+        } else { lightningPhase = 0; }
+
+        // Spike Timers
+        for(let b of levelBlocks) {
+            if(b.type === 'spike_up') {
+                b.timer--;
+                if(b.timer <= 0) b.type = 'spike';}
+        }
+
+        // Sky Color & Weather
+        let isStorm = (currentLevel === 5 || currentLevel === 6 || currentLevel === 8 || currentLevel === 10);
+        if(state === 'PLAYING' && isStorm) {
+            ctx.fillStyle = '#4A4A4A'; 
+            ctx.fillRect(0, 0, GAME_W, GAME_H);
+            ctx.fillStyle = 'rgba(200,200,255,0.3)';
+            for(let r of rainDrops) {
+                ctx.fillRect(r.x, r.y, 2, 10);
+                r.y += r.speed; r.x -= 1; 
+                if(r.y > GAME_H) { r.y = -10; r.x = Math.random()*GAME_W; }
+                if(r.x < 0) r.x = GAME_W;
+            }
+        } else {
+            ctx.fillStyle = '#87CEEB'; 
+            ctx.fillRect(0, 0, GAME_W, GAME_H);
+            ctx.fillStyle = 'rgba(255,255,255,0.8)';
+            let ct = Date.now()/2000;
+            ctx.fillRect(100+Math.sin(ct)*50, 50, 60, 20);
+            ctx.fillRect(400+Math.cos(ct)*40, 80, 80, 20);
+        }
+
+        // Wind Effect
+        if(state === 'PLAYING' && (currentLevel === 8 || currentLevel === 10)) {
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            for(let w of windParticles) {
+                ctx.fillRect(w.x, w.y, 15, 2);
+                w.x += w.speed;
+                if(w.x > GAME_W) { w.x = -20; w.y = Math.random()*GAME_H; }
+            }
+        }
+
+        for (let i = particles.length - 1; i >= 0; i--) { let p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.2; p.life--; if(p.life <= 0) particles.splice(i, 1); }
+
+        if(state === 'MENU') {
+            updateEntity(ghost, menuBlocks);
+            menuBlocks.forEach(b => drawBlock(b));
+            drawEntity(ghost, 'rgba(33, 150, 243, 0.5)'); 
+            particles.forEach(p => { ctx.globalAlpha = p.life / 30; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.size, p.size); });
+            ctx.globalAlpha = 1;
+        } else if(state === 'PLAYING') {
+            updateEntity(player, levelBlocks);
+            levelBlocks.forEach(b => drawBlock(b));
+            drawEntity(player, '#2196F3');
+            particles.forEach(p => { ctx.globalAlpha = p.life / 30; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.size, p.size); });
+            ctx.globalAlpha = 1;
+        }
+        requestAnimationFrame(loop);
+    }
+
+    // Input Setup
+    window.addEventListener('keydown', e => {
+        if(e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
+        if(e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
+        if(e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { if(!keys.jump) keys.jumpPressed = true; keys.jump = true; }
+        if(e.code === 'Escape') { if(state === 'PLAYING') pauseGame(); else if(state === 'PAUSED') resumeGame(); }
+    });
+    window.addEventListener('keyup', e => {
+        if(e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+        if(e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+        if(e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') keys.jump = false;
+    });
+    function setupTouch(id, key) {
+        const el = document.getElementById(id);
+        el.addEventListener('touchstart', e => { e.preventDefault(); keys[key] = true; if(key==='jump') keys.jumpPressed=true; }, {passive:false});
+        el.addEventListener('touchend', e => { e.preventDefault(); keys[key] = false; }, {passive:false});
+        el.addEventListener('touchcancel', e => { keys[key] = false; });
+    }
+    setupTouch('left-btn', 'left'); setupTouch('right-btn', 'right'); setupTouch('jump-btn', 'jump');
+
+    menuBlocks = levelsData[0](); 
+    ghost.x = B*2; ghost.y = 16*B - ghost.h;
+    loop();
+</script>
+</body>
+</html>
