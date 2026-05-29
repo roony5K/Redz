@@ -70,3 +70,23 @@ I = ice   C = cactus   P = portal   N = netherrack   Sd = sand
 16   D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D
 17   D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D
 18   D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D  D
+level 9
+Row 00: . . . . . . . . . . . . . . . . . . . . . . . . .
+Row 01: . . . . . . . . . . . . . . . . . . . . . . . . .
+Row 02: . . . . . . . . . . . . P . . . . . . . . . . . .
+Row 03: . . . . . . . . . . . G G G . . . . . . . . . . .
+Row 04: . . . . . . . . . . F . . . . . . . . . . . . . .
+Row 05: . . . . . . . . . G G . . . . . . . . . . . . . .
+Row 06: . . . . . . . . F F . . . . . . . . . . . . . . .
+Row 07: . . . . . . . G G . . . . . . . . . . . . . . . .
+Row 08: . . . . . . F . . . . . . . . . . . . . . . . . .
+Row 09: . . . . . G G . . . . . . . . . . . . . . . . . .
+Row 10: . . . . F F . . . . . . . . . . . . . . . . . . .
+Row 11: . . . G G . . . . . . . . . . . . . . . . . . . .
+Row 12: . . F . . . . . . . . . . . . . . . . . . . . . .
+Row 13: . G G . . . . . . . . . . . . . . . . . . . . . .
+Row 14: G G . . . . . . . . . . . . . . . . . . . . . . .
+Row 15: D D . . . A A A A A A A A A A A A . . . . . . . .
+Row 16: D D . . . A A A A A A A A A A A A . . . . . . . .
+Row 17: D D D D D D D D D D D D D D D D D D D D D D D D D
+Row 18: D D D D D D D D D D D D D D D D D D D D D D D D D
