@@ -73,15 +73,15 @@ I = ice   C = cactus   P = portal   N = netherrack   Sd = sand
 level 9
 Row 00: . . . . . . . . . . . . . . . . . . . . . . . . .
 Row 01: . . . . . . . . . . . . . . . . . . . . . . . . .
-Row 02: . . . . . . . . . . . . P . . . . . . . . . . . .
-Row 03: . . . . . . . . . . . G G G . . . . . . . . . . .
-Row 04: . . . . . . . . . . F . . . . . . . . . . . . . .
-Row 05: . . . . . . . . . G G . . . . . . . . . . . . . .
-Row 06: . . . . . . . . F F . . . . . . . . . . . . . . .
-Row 07: . . . . . . . G G . . . . . . . . . . . . . . . .
-Row 08: . . . . . . F . . . . . . . . . . . . . . . . . .
-Row 09: . . . . . G G . . . . . . . . . . . . . . . . . .
-Row 10: . . . . F F . . . . . . . . . . . . . . . . . . .
+Row 02: . . . . . . . . . . . .  . . . . . . . p . . . .
+Row 03: . . . . . . . . . . .             t  s  G . . . . . . . . . . .
+Row 04: . . . . . . . . . .             F . . . . . . . . . . . . . .
+Row 05: . . . . . . . . .           G G . . . . . . . . . . . . . .
+Row 06: . . . . . . . .         F F . . . . . . . . . . . . . . .
+Row 07: . . . . . . .       G G . . . . . . . . . . . . . . . .
+Row 08: . . . . . .       F . . . . . . . . . . . . . . . . . .
+Row 09: . . . . .     G G . . . . . . . . . . . . . . . . . .
+Row 10: . . . .   F F . . . . . . . . . . . . . . . . . . .
 Row 11: . . . G G . . . . . . . . . . . . . . . . . . . .
 Row 12: . . F . . . . . . . . . . . . . . . . . . . . . .
 Row 13: . G G . . . . . . . . . . . . . . . . . . . . . .
@@ -92,7 +92,7 @@ Row 17: D D D D D D D D D D D D D D D D D D D D D D D D D
 Row 18: D D D D D D D D D D D D D D D D D D D D D D D D D
 
 
-gird level.__ 
+gird level.9
 . = empty   G = grass   F = fake_grass   D = dirt   L = lava   T = trigger
 S = spike (hidden)   A = spike (visible)   Z = lightning (sky strike)
 P = portal   W = wind level   ST = storm level
