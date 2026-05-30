@@ -110,7 +110,7 @@ P = portal   W = wind level   ST = storm level
 09   .  .  .  .  .  s  t  f  f  f  f  g  g  g  g  .  .  .  .  .  g  g  .  .  .
 10   .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
 11   .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
-12   g  g  g  f  f  f  f  f  f  f  f  f  f  t  s  t  s  .  g  .  l  l  .  g  g
+12   g  g  g  f  f  f  f  f  f  f  f  f  f  t  s  g    .  g  .  l  l  .  g  g
 13   .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
 14   .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
 15   .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
