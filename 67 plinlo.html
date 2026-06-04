@@ -216,6 +216,7 @@
         <div class="setting-row"><span>Music</span><div class="toggle-switch active" onclick="toggleSetting(this)"><div class="toggle-knob"></div></div></div>
         <div class="setting-row"><span>Sound</span><div class="toggle-switch active" onclick="toggleSetting(this)"><div class="toggle-knob"></div></div></div>
         <button class="btn-red" onclick="handleResetClick()" style="margin-top: 30px;">RESET PROGRESS</button>
+        <button class="btn-red" onclick="if(confirm('Delete ALL saved data including level edits?')){localStorage.clear();alert('All data cleared! Reload the page.');}" style="font-size:20px;padding:10px 20px;">CLEAR ALL DATA</button>
         <button class="btn-grey" onclick="goBackFromSettings()">BACK</button>
     </div>
     <div id="pause-screen" class="screen">
@@ -224,11 +225,14 @@
         <button class="btn-blue" onclick="showScreen('level-screen')">LEVELS</button>
         <button class="btn-grey" onclick="showScreen('settings-screen')">SETTINGS</button>
         <button class="btn-blue" onclick="showScreen('editor-screen'); editorInit();">LEVEL EDITOR</button>
+        <button class="btn-blue" onclick="backToEditor()">BACK TO EDITOR</button>
         <button class="btn-red" onclick="returnToMenu()">MAIN MENU</button>
     </div>
 
     <div id="hud">
         <div id="level-text">LEVEL 1</div>
+        <div id="death-text" style="color:#f44336;font-size:20px;font-weight:bold;text-shadow:2px 2px 0 #000;">DEATHS: 0</div>
+        <div id="time-text" style="color:#FFEB3B;font-size:18px;font-weight:bold;text-shadow:2px 2px 0 #000;display:none;"></div>
         <div id="wind-text">WIND >></div>
         <div id="fog-text">FOG RISING!</div>
         <button id="pause-btn" class="btn-grey" onclick="pauseGame()">||</button>
@@ -236,8 +240,8 @@
     <div id="unlock-popup"></div>
 
     <div id="mobile-controls">
-        <div id="left-btn" class="touch-btn"><</div>
-        <div id="right-btn" class="touch-btn">></div>
+        <div id="left-btn" class="touch-btn">◀</div>
+        <div id="right-btn" class="touch-btn">▶</div>
         <div id="jump-btn" class="touch-btn">JUMP</div>
     </div>
 
@@ -257,8 +261,14 @@
     }
     window.addEventListener('resize', resize); resize();
 
-    let isMobile = window.matchMedia('(pointer: coarse) and (max-width: 900px)').matches && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-    window.addEventListener('resize', () => { isMobile = window.matchMedia('(pointer: coarse) and (max-width: 900px)').matches && ('ontouchstart' in window || navigator.maxTouchPoints > 0); });
+    // Mobile detection: only show touch controls on actual mobile devices
+    // Must have: touch capability AND small screen AND no precise pointer
+    let isMobile = ('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.matchMedia('(pointer: coarse)').matches && window.innerWidth <= 900;
+    window.addEventListener('resize', () => {
+        isMobile = ('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.matchMedia('(pointer: coarse)').matches && window.innerWidth <= 900;
+        const mc = document.getElementById('mobile-controls');
+        if(!isMobile) mc.classList.remove('mobile-visible');
+    });
     let state = 'MENU'; let previousState = 'MENU';
     let isCustomLevel = false;
     let currentLevel = 1;
@@ -283,9 +293,9 @@
     let levelBlocks = [], menuBlocks = [];
     let customBlocks = [];
     // Per-level spawn positions (row of ground beneath player feet)
-    const levelSpawnRow = [0, 17, 17, 17, 17, 17, 14, 14, 14, 7, 12, 18, 18, 1, 18, 18, 17, 17, 17, 17, 17];
+    const levelSpawnRow = [0, 17, 17, 17, 17, 17, 14, 14, 14, 17, 17, 18, 18, 18, 18, 18, 18, 17, 17, 17, 17];
     // Per-level spawn column (in grid units)
-    const levelSpawnCol = [0, 2, 2, 2, 2, 2, 2, 2, 2, 0, 1, 5, 0, 22, 0, 0, 2, 2, 2, 2, 2];
+    const levelSpawnCol = [0, 2, 2, 2, 2, 2, 2, 2, 2, 23, 5, 2, 0, 5, 1, 0, 0, 1, 1, 23, 1];
     let particles = [];
     let windParticles = [];
     for(let i=0; i<30; i++) windParticles.push({x: Math.random()*GAME_W, y: Math.random()*GAME_H, speed: 10+Math.random()*10});
@@ -349,617 +359,553 @@
         }
     }
     function handlePlayClick() { currentLevel = 1; startGame(currentLevel); }
-    function handleResetClick() { maxLevel = 20; alert("Progress Reset!"); populateLevelGrid(); }
+    let deathCount = 0;
+    let levelStartTime = 0;
+    let bestTimes = JSON.parse(localStorage.getItem('pixelObbyBestTimes') || '{}');
+    let levelCompleteTimer = 0;
+    let levelCompleteDeaths = 0;
+    let showLevelComplete = false;
+
+    function handleResetClick() { maxLevel = 1; deathCount = 0; bestTimes = {}; localStorage.removeItem('pixelObbyBestTimes'); localStorage.removeItem('pixelObbyEditedLevels'); alert("Progress Reset!"); populateLevelGrid(); }
     function toggleSetting(el) { el.classList.toggle('active'); }
     function goBackFromLevels() { if(state === 'PAUSED') showScreen('pause-screen'); else showScreen('menu-screen'); }
     function goBackFromSettings() { if(state === 'PAUSED' || previousState === 'PAUSED') showScreen('pause-screen'); else showScreen('menu-screen'); }
     function pauseGame() { state = 'PAUSED'; previousState = 'PAUSED'; showScreen('pause-screen'); if(isMobile) document.getElementById('mobile-controls').classList.remove('mobile-visible'); }
     function resumeGame() { state = 'PLAYING'; document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); if(isMobile) document.getElementById('mobile-controls').classList.add('mobile-visible'); }
     function returnToMenu() { isCustomLevel = false; state = 'MENU'; previousState = 'MENU'; showScreen('menu-screen'); document.getElementById('hud').style.display = 'none'; if(isMobile) document.getElementById('mobile-controls').classList.remove('mobile-visible'); ghost.x=50; ghost.y=400; }
+    function backToEditor() {
+        isCustomLevel = false;
+        state = 'MENU';
+        document.getElementById('hud').style.display = 'none';
+        if(isMobile) document.getElementById('mobile-controls').classList.remove('mobile-visible');
+        showScreen('editor-screen');
+        editorInit();
+    }
 
     // --- LEVEL DATA ---
-    function g(x, y, type) { return {x: x*B, y: y*B, w:B, h:B, type: type, origType: type, timer: 0, sinkTimer: 0}; }
+    function g(x, y, type) { return {x: x*B, y: y*B, w:B, h:B, type: type, origType: type, timer: 0, sinkTimer: 0, icicleTimer: type === 'icicle' ? Math.floor(Math.random() * 90) : 0}; }
     function portal(x, y) { return {x: x*B, y: y*B, w:B, h:B*3, type: 'portal', origType: 'portal', timer:0, sinkTimer: 0}; }
     function row(x1, x2, y, type) { let b=[]; for(let i=x1; i<=x2; i++) b.push(g(i, y, type)); return b; }
     function hangingVine(x, y, range, speed) {
         return {x: x*B, y: y*B, w:B, h:B, type: 'hanging_vine', origType: 'hanging_vine', timer: 0, swingCenter: x*B, swingRange: range*B, swingSpeed: speed, swingTimer: Math.random()*Math.PI*2, sinkTimer: 0, anchorX: x*B, anchorY: (y-2)*B};
     }
 
-    const levelsData = [
+    // Level grids in character format — 25 cols × 19 rows
+    // Legend: . = air, G = grass, D = dirt, F = fake_grass, S = spike (hidden),
+    //         V = spike_visible, T = trigger, L = lava, N = vine, H = hanging_vine,
+    //         M = mud, B = thorn_bush, Q = quicksand, I = ice, O = snow,
+    //         E = frozen_grass, R = fake_ice, C = icicle, P = portal, W = flower
+    const levelGrids = [
         // L1
-        () => [...row(0, 4, 17, 'grass'), g(7, 17, 'grass'), g(8, 17, 'grass'), g(9, 17, 'grass'), g(12, 16, 'grass'), g(16, 17, 'grass'), ...row(19, 24, 17, 'grass'), portal(22, 14)],
+        [
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            "......................P..",
+            ".........................",
+            "............G............",
+            "GGGGG..GGG......G..GGGGGG",
+            ".........................",
+        ],
         // L2
-        () => [...row(0, 3, 17, 'grass'), g(6, 15, 'grass'), g(10, 13, 'grass'), g(11, 13, 'grass'), g(14, 16, 'grass'), g(17, 17, 'grass'), ...row(19, 24, 17, 'grass'), portal(22, 14)],
+        [
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            "..........GG.............",
+            "......................P..",
+            "......G..................",
+            "..............G..........",
+            "GGGG.............G.GGGGGG",
+            ".........................",
+        ],
         // L3
-        () => [...row(0, 3, 17, 'grass'), g(6, 15, 'grass'), g(9, 13, 'grass'), g(10, 13, 'grass'), g(11, 11, 'grass'), g(14, 11, 'grass'), g(17, 15, 'grass'), ...row(19, 24, 17, 'grass'), portal(22, 14)],
+        [
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            "...........G..G..........",
+            ".........................",
+            ".........GG..............",
+            "......................P..",
+            "......G..........G.......",
+            ".........................",
+            "GGGG...............GGGGGG",
+            ".........................",
+        ],
         // L4
-        () => [...row(0, 3, 17, 'grass'), g(4, 17, 'trigger'), g(5, 17, 'spike'), g(6, 17, 'grass'), g(9, 15, 'grass'), g(13, 17, 'trigger'), g(14, 17, 'spike'), g(15, 17, 'grass'), g(18, 15, 'grass'), g(21, 17, 'trigger'), g(22, 17, 'spike'), g(23, 17, 'grass'), portal(23, 14)],
+        [
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".......................P.",
+            ".........G........G......",
+            ".........................",
+            "GGGGTSG......TSG.....TSG.",
+            ".........................",
+        ],
         // L5 — Lava Crossing + Lightning Strikes from Sky
-        () => {
-            let b = [];
-            b.push(...row(0, 3, 17, 'grass'));
-            b.push(g(4, 17, 'lava'), g(5, 17, 'lava'));
-            b.push(g(6, 15, 'grass'), g(7, 15, 'grass'));
-            b.push(g(8, 17, 'lava'), g(9, 17, 'lava'));
-            b.push(g(10, 17, 'grass'), g(11, 17, 'grass'));
-            b.push(g(12, 17, 'lava'), g(13, 17, 'lava'));
-            b.push(g(14, 15, 'grass'), g(15, 15, 'grass'));
-            b.push(g(16, 17, 'trigger'), g(17, 17, 'spike'));
-            b.push(...row(19, 24, 17, 'grass'));
-            b.push(portal(22, 14));
-            return b;
-        },
-        // L6 — Grass Bridge + Troll Spikes + Visible Spikes + Lava + Fake Grass (Gird + f)
-        () => {
-            let b = [];
-            // Row 8: Portal at col 4, grass bridge with troll spike and visible spikes
-            b.push(portal(4, 6)); // Portal spans rows 6-8
-            b.push(g(5, 8, 'fake_grass'), g(6, 8, 'grass'), g(7, 8, 'grass')); // f=fake grass at start!
-            b.push(g(8, 8, 'spike'), g(9, 8, 'trigger')); // Troll spike
-            b.push(g(10, 8, 'spike_visible'), g(11, 8, 'spike_visible'));
-            b.push(g(12, 8, 'grass'), g(13, 8, 'grass'), g(14, 8, 'fake_grass'), g(15, 8, 'grass'), g(16, 8, 'grass')); // f in bridge
-            // Row 10: Small platform
-            b.push(g(19, 10, 'grass'), g(20, 10, 'grass'));
-            // Row 12: Small platform
-            b.push(g(23, 12, 'grass'), g(24, 12, 'fake_grass')); // f at edge
-            // Row 14: Main ground with hazards
-            b.push(...row(0, 4, 14, 'grass'));
-            b.push(g(5, 14, 'spike_visible'), g(6, 14, 'spike_visible'), g(7, 14, 'spike_visible'), g(8, 14, 'spike_visible'));
-            b.push(g(9, 14, 'grass'), g(10, 14, 'trigger'), g(11, 14, 'spike')); // Troll spike
-            b.push(g(15, 14, 'fake_grass'), ...row(16, 20, 14, 'grass')); // f hidden in ground
-            b.push(g(21, 14, 'lava'), g(22, 14, 'lava'), g(23, 14, 'lava'));
-            b.push(g(24, 14, 'grass'));
-            // Row 15: Dirt and visible spikes below
-            b.push(g(0, 15, 'dirt'), g(3, 15, 'dirt'));
-            b.push(...row(12, 22, 15, 'spike_visible'));
-            return b;
-        },
-        // L7 — Lightning Fields + Troll Spikes + Lava + Visible Spikes + Fake Grass (Gird + f)
-        () => {
-            let b = [];
-            // Row 7: Portal at col 15
-            b.push(portal(15, 5)); // Portal spans rows 5-7
-            // Row 8: Grass with troll spike
-            b.push(g(15, 8, 'fake_grass'), g(16, 8, 'spike'), g(17, 8, 'trigger')); // f at edge
-            // Row 9: Was lightning block — now grass (lightning strikes from sky instead)
-            b.push(g(20, 9, 'grass'));
-            // Row 10: Grass platform
-            b.push(g(19, 10, 'grass'), g(20, 10, 'grass'), g(21, 10, 'fake_grass')); // f at edge
-            // Row 12: Small platform
-            b.push(g(23, 12, 'grass'), g(24, 12, 'fake_grass')); // f at edge
-            // Row 13: Was lightning row — now grass (lightning strikes from sky instead)
-            b.push(g(3, 13, 'fake_grass'), g(5, 13, 'grass'), g(7, 13, 'fake_grass')); // f traps!
-            // Row 14: Main ground with troll spike
-            b.push(...row(0, 9, 14, 'grass'));
-            b.push(g(11, 14, 'grass'), g(12, 14, 'grass'));
-            b.push(g(13, 14, 'trigger'), g(14, 14, 'spike')); // Troll spike
-            b.push(g(15, 14, 'fake_grass'), g(16, 14, 'grass')); // f hidden in ground
-            b.push(...row(19, 24, 14, 'grass'));
-            // Row 15: Lava river and visible spikes
-            b.push(...row(9, 18, 15, 'lava'));
-            b.push(...row(20, 24, 15, 'spike_visible'));
-            return b;
-        },
-        // L8 — Descending Staircase + Lava + Troll Spikes + Fake Grass (Gird + f)
-        () => {
-            let b = [];
-            // Portal at top-right
-            b.push(portal(17, 0)); // Portal at top
-            // Row 2: Grass near portal
-            b.push(g(17, 2, 'grass'), g(18, 2, 'fake_grass'), g(19, 2, 'grass')); // f in middle!
-            // Row 3: Step down-left
-            b.push(g(13, 3, 'fake_grass'), g(14, 3, 'grass')); // f at edge of step!
-            // Row 4: Step with troll spike
-            b.push(g(12, 4, 'grass'), g(13, 4, 'trigger'), g(14, 4, 'spike'), g(15, 4, 'fake_grass')); // f after spike!
-            // Row 5: Step
-            b.push(g(9, 5, 'fake_grass'), g(10, 5, 'grass')); // f crumbles!
-            // Row 7: Step
-            b.push(g(8, 7, 'grass'), g(9, 7, 'fake_grass')); // f crumbles!
-            // Row 9: Step with troll spike
-            b.push(g(5, 9, 'grass'), g(6, 9, 'fake_grass'), g(7, 9, 'trigger'), g(8, 9, 'spike'), g(9, 9, 'fake_grass')); // f before AND after spike!
-            // Row 11: Step
-            b.push(g(2, 11, 'fake_grass'), g(3, 11, 'fake_grass')); // Both are f! Must jump fast!
-            // Row 14: Starting ledge + lava wall
-            b.push(g(0, 14, 'grass'), g(1, 14, 'grass'), g(2, 14, 'grass'));
-            b.push(...row(3, 24, 14, 'lava'));
-            // Row 15-18: Dirt floor
-            for(let r=15; r<=18; r++) b.push(...row(0, 24, r, 'dirt'));
-            return b;
-        },
-        // L9 — UPGRADED v2 from Gird (F = fake_grass)
-        () => {
-            let b = [];
-            // Row 4-6: Portal at col 0
-            b.push(portal(0, 4)); // Portal spans rows 4-6
-            // Row 7: Grass under portal (spawn point)
-            b.push(g(0, 7, 'grass'));
-            // Row 8: Small grass platforms
-            b.push(g(2, 8, 'grass'), g(3, 8, 'grass'));
-            b.push(g(17, 8, 'grass'), g(18, 8, 'grass'));
-            // Row 9: Troll spike + fake grass bridge + grass + grass
-            b.push(g(5, 9, 'spike'), g(6, 9, 'trigger')); // Troll spike!
-            b.push(g(7, 9, 'fake_grass'), g(8, 9, 'fake_grass'), g(9, 9, 'fake_grass'), g(10, 9, 'fake_grass')); // 4 fake grass!
-            b.push(g(11, 9, 'grass'), g(12, 9, 'grass'), g(13, 9, 'grass'), g(14, 9, 'grass')); // Safe grass
-            b.push(g(20, 9, 'grass'), g(21, 9, 'grass'));
-            // Row 12: Big bridge — grass start, long fake grass, double troll spikes, grass, lava, grass
-            b.push(g(0, 12, 'grass'), g(1, 12, 'grass'), g(2, 12, 'grass')); // Safe start
-            b.push(g(3, 12, 'fake_grass'), g(4, 12, 'fake_grass'), g(5, 12, 'fake_grass'), g(6, 12, 'fake_grass'), g(7, 12, 'fake_grass'), g(8, 12, 'fake_grass'), g(9, 12, 'fake_grass'), g(10, 12, 'fake_grass'), g(11, 12, 'fake_grass'), g(12, 12, 'fake_grass')); // 10 FAKE GRASS!
-            b.push(g(13, 12, 'trigger'), g(14, 12, 'spike'), g(15, 12, 'trigger'), g(16, 12, 'spike')); // Double troll spike!
-            b.push(g(18, 12, 'grass')); // Safe spot
-            b.push(g(20, 12, 'lava'), g(21, 12, 'lava')); // Lava gap!
-            b.push(g(23, 12, 'grass'), g(24, 12, 'grass')); // Safe landing
-            return b;
-        },
-        // L10 — UPGRADED from Gird (F = fake_grass, W = wind)
-        () => {
-            let b = [];
-            // Row 6: Portal at col 0
-            b.push(portal(0, 4)); // Portal spans rows 4-6
-            // Row 7: Grass at col 0 (under portal)
-            b.push(g(0, 7, 'grass'));
-            // Row 8: Small grass platforms
-            b.push(g(2, 8, 'grass'), g(3, 8, 'grass'));
-            b.push(g(17, 8, 'grass'), g(18, 8, 'grass'));
-            // Row 9: Troll spike + fake grass bridge + grass
-            b.push(g(5, 9, 'spike'), g(6, 9, 'trigger')); // Troll spike!
-            b.push(g(7, 9, 'fake_grass'), g(8, 9, 'fake_grass'), g(9, 9, 'fake_grass'), g(10, 9, 'fake_grass')); // 4 fake grass!
-            b.push(g(11, 9, 'grass'), g(12, 9, 'grass'), g(13, 9, 'grass'), g(14, 9, 'grass')); // Safe grass
-            b.push(g(20, 9, 'grass'), g(21, 9, 'grass'));
-            // Row 12: Long fake grass bridge with troll spikes + lava
-            b.push(g(0, 12, 'grass'), g(1, 12, 'grass'), g(2, 12, 'grass')); // Safe start
-            b.push(g(3, 12, 'fake_grass'), g(4, 12, 'fake_grass'), g(5, 12, 'fake_grass'), g(6, 12, 'fake_grass'), g(7, 12, 'fake_grass'), g(8, 12, 'fake_grass'), g(9, 12, 'fake_grass'), g(10, 12, 'fake_grass'), g(11, 12, 'fake_grass'), g(12, 12, 'fake_grass')); // 10 FAKE GRASS!
-            b.push(g(13, 12, 'trigger'), g(14, 12, 'spike'), g(15, 12, 'trigger'), g(16, 12, 'spike')); // Double troll spike!
-            b.push(g(18, 12, 'grass')); // Safe spot
-            b.push(g(20, 12, 'lava'), g(21, 12, 'lava')); // Lava gap!
-            b.push(g(23, 12, 'grass'), g(24, 12, 'grass')); // Safe landing
-            return b;
-        },
-        // L11 — JUNGLE: From GitHub Gird file (exact match)
-        // G=grass, F=fake_grass, M=mud, H=hanging_vine, V=spike_visible, T=trigger, S=spike, N=vine, P=portal, L=lava
-        () => {
-            let b = [];
-            // Row 3: Grass at col 3
-            b.push(g(3, 3, 'grass'));
-            // Row 4: Platforms with hanging vine, spike visible, trigger/spike combo
-            b.push(g(4, 4, 'grass'), g(5, 4, 'fake_grass'), g(6, 4, 'fake_grass'), g(7, 4, 'mud'), g(8, 4, 'mud'), g(9, 4, 'grass'));
-            b.push(hangingVine(12, 4, 2, 2.0));
-            b.push(g(15, 4, 'grass'));
-            b.push(g(17, 4, 'spike_visible'), g(18, 4, 'spike_visible'));
-            b.push(g(19, 4, 'fake_grass'), g(20, 4, 'mud'), g(21, 4, 'fake_grass'));
-            b.push(g(22, 4, 'trigger'), g(23, 4, 'spike'));
-            // Row 6: Left platform + vine wall start at col 23
-            b.push(g(0, 6, 'grass'), g(1, 6, 'fake_grass'));
-            b.push(g(23, 6, 'vine'));
-            // Row 7: Vine wall col 23
-            b.push(g(23, 7, 'vine'));
-            // Row 8: Small platform + vine wall col 23
-            b.push(g(4, 8, 'fake_grass'), g(5, 8, 'grass'));
-            b.push(g(23, 8, 'vine'));
-            // Row 9: Vine wall col 23
-            b.push(g(23, 9, 'vine'));
-            // Row 10: Left platform + vine wall col 23
-            b.push(g(0, 10, 'grass'), g(1, 10, 'fake_grass'));
-            b.push(g(23, 10, 'vine'));
-            // Row 11: Vine wall col 23
-            b.push(g(23, 11, 'vine'));
-            // Row 12: Vine wall col 23
-            b.push(g(23, 12, 'vine'));
-            // Row 13: Small platform + vine wall col 23
-            b.push(g(4, 13, 'fake_grass'), g(5, 13, 'grass'));
-            b.push(g(23, 13, 'vine'));
-            // Row 15: Left platform
-            b.push(g(0, 15, 'grass'), g(1, 15, 'fake_grass'));
-            // Row 16: Portal at col 23 (3-high: rows 14,15,16)
-            b.push(portal(23, 14));
-            // Row 17: Lava under portal
-            b.push(g(23, 17, 'lava'), g(24, 17, 'lava'));
-            // Row 18: Lava floor with grass island at start (spawn at col 5)
-            b.push(g(0, 18, 'lava'), g(1, 18, 'lava'));
-            b.push(g(2, 18, 'grass'), g(3, 18, 'grass'), g(4, 18, 'grass'), g(5, 18, 'grass'));
-            // cols 6-24 are lava
-            b.push(g(6, 18, 'lava'), g(7, 18, 'lava'), g(8, 18, 'lava'), g(9, 18, 'lava'));
-            b.push(g(10, 18, 'lava'), g(11, 18, 'lava'), g(12, 18, 'lava'), g(13, 18, 'lava'));
-            b.push(g(14, 18, 'lava'), g(15, 18, 'lava'), g(16, 18, 'lava'), g(17, 18, 'lava'));
-            b.push(g(18, 18, 'lava'), g(19, 18, 'lava'), g(20, 18, 'lava'), g(21, 18, 'lava'));
-            b.push(g(22, 18, 'lava'), g(23, 18, 'lava'), g(24, 18, 'lava'));
-            return b;
-        },
-        // L12 — JUNGLE: From GitHub Gird file (exact match)
-        // G=grass, F=fake_grass, M=mud, H=hanging_vine, V=spike_visible, T=trigger, S=spike, N=vine, B=thorn_bush, Q=quicksand, P=portal, L=lava
-        () => {
-            let b = [];
-            // Row 4: Portal at col 19 (3-high: rows 2,3,4)
-            b.push(portal(19, 2));
-            // Row 6: Mud platform at top right
-            b.push(g(21, 6, 'mud'), g(22, 6, 'mud'), g(23, 6, 'mud'));
-            // Row 7: Vine wall col 24 start
-            b.push(g(24, 7, 'vine'));
-            // Row 8: Vine wall col 24
-            b.push(g(24, 8, 'vine'));
-            // Row 9: Vine wall col 24
-            b.push(g(24, 9, 'vine'));
-            // Row 10: Main platform with fake grass bridge, visible spikes, troll spike, hanging vine
-            b.push(g(2, 10, 'grass'));
-            b.push(g(3, 10, 'fake_grass'), g(4, 10, 'fake_grass'), g(5, 10, 'fake_grass'));
-            b.push(g(6, 10, 'fake_grass'), g(7, 10, 'fake_grass'), g(8, 10, 'fake_grass'), g(9, 10, 'fake_grass'));
-            b.push(g(10, 10, 'spike_visible'), g(11, 10, 'spike_visible'));
-            b.push(g(12, 10, 'grass'), g(13, 10, 'grass'));
-            b.push(g(14, 10, 'trigger'), g(15, 10, 'spike')); // Troll spike
-            b.push(hangingVine(18, 10, 2, 2.0));
-            b.push(g(21, 10, 'grass'), g(22, 10, 'mud'), g(23, 10, 'grass'));
-            b.push(g(24, 10, 'vine'));
-            // Row 11: Vine wall col 0
-            b.push(g(0, 11, 'vine'));
-            // Row 12: Vine wall col 0
-            b.push(g(0, 12, 'vine'));
-            // Row 13: Vine wall col 0
-            b.push(g(0, 13, 'vine'));
-            // Row 14: Vine wall col 0, grass, lava, hanging vine, vine wall col 24
-            b.push(g(0, 14, 'vine'), g(1, 14, 'grass'), g(2, 14, 'lava'));
-            b.push(hangingVine(4, 14, 2, 2.0));
-            b.push(g(24, 14, 'vine'));
-            // Row 15: Platform with spike visible, quicksand, thorn bush, fake grass, vine wall col 24
-            b.push(g(7, 15, 'grass'), g(8, 15, 'spike_visible'));
-            b.push(g(9, 15, 'fake_grass'), g(10, 15, 'fake_grass'), g(11, 15, 'fake_grass'));
-            b.push(g(12, 15, 'quicksand'), g(13, 15, 'quicksand'), g(14, 15, 'quicksand'));
-            b.push(g(15, 15, 'thorn_bush'));
-            b.push(g(16, 15, 'fake_grass'), g(17, 15, 'fake_grass'), g(18, 15, 'fake_grass'));
-            b.push(g(19, 15, 'grass'));
-            b.push(g(22, 15, 'grass'));
-            b.push(g(24, 15, 'vine'));
-            // Row 16: Vine wall col 24
-            b.push(g(24, 16, 'vine'));
-            // Row 17: Vine wall col 24
-            b.push(g(24, 17, 'vine'));
-            // Row 18: Ground floor with spike gauntlet, hanging vine, fake grass, mud, vine walls
-            b.push(g(0, 18, 'grass'), g(1, 18, 'grass'), g(2, 18, 'grass'));
-            b.push(g(3, 18, 'spike_visible'), g(4, 18, 'spike_visible'), g(5, 18, 'spike_visible'));
-            b.push(g(6, 18, 'grass'), g(7, 18, 'fake_grass'));
-            b.push(g(8, 18, 'trigger'), g(9, 18, 'spike')); // Troll spike
-            b.push(g(10, 18, 'grass'), g(11, 18, 'grass'));
-            b.push(hangingVine(15, 18, 2, 2.0));
-            b.push(g(19, 18, 'grass'));
-            b.push(g(20, 18, 'fake_grass'), g(21, 18, 'fake_grass'), g(22, 18, 'fake_grass'));
-            b.push(g(23, 18, 'mud'));
-            b.push(g(24, 18, 'vine'));
-            return b;
-        },
-        // L13 — JUNGLE: From GitHub Gird file (exact match)
-        // G=grass, D=dirt, F=fake_grass, S=spike, V=spike_visible, T=trigger, L=lava, N=vine, H=hanging_vine, M=mud, B=thorn_bush, Q=quicksand, P=portal
-        () => {
-            let b = [];
-            // Row 1: Lava ceiling with dirt below, vine at col 22
-            b.push(g(0, 1, 'lava'), g(1, 1, 'lava'), g(2, 1, 'lava'), g(3, 1, 'lava'), g(4, 1, 'lava'));
-            b.push(g(5, 1, 'lava'), g(6, 1, 'lava'), g(7, 1, 'lava'), g(8, 1, 'lava'), g(9, 1, 'lava'));
-            b.push(g(10, 1, 'lava'), g(11, 1, 'lava'), g(12, 1, 'lava'), g(13, 1, 'lava'), g(14, 1, 'lava'));
-            b.push(g(15, 1, 'lava'), g(16, 1, 'lava'), g(17, 1, 'lava'), g(18, 1, 'lava'), g(19, 1, 'lava'));
-            b.push(g(20, 1, 'lava'), g(21, 1, 'lava'), g(22, 1, 'vine'));
-            // Row 2: Dirt floor under lava, vine at col 22
-            b.push(...row(0, 21, 2, 'dirt'));
-            b.push(g(22, 2, 'vine'));
-            // Row 3: Vine at col 22
-            b.push(g(22, 3, 'vine'));
-            // Row 4: Vine at col 22
-            b.push(g(22, 4, 'vine'));
-            // Row 5: Spike visible at col 23
-            b.push(g(23, 5, 'spike_visible'));
-            // Row 7: Spike visible at col 0
-            b.push(g(0, 7, 'spike_visible'));
-            // Row 8: Complex platform with vine wall, lava, spikes, hanging vine, thorn bush, quicksand
-            b.push(g(0, 8, 'vine'));
-            b.push(g(2, 8, 'grass'), g(3, 8, 'lava'), g(4, 8, 'lava'), g(5, 8, 'grass'));
-            b.push(g(6, 8, 'spike'), g(7, 8, 'trigger'), g(8, 8, 'grass'), g(9, 8, 'fake_grass'));
-            b.push(g(10, 8, 'spike_visible'));
-            b.push(hangingVine(12, 8, 2, 2.0));
-            b.push(g(16, 8, 'thorn_bush'), g(17, 8, 'grass'), g(18, 8, 'mud'), g(19, 8, 'mud'));
-            b.push(g(20, 8, 'grass'), g(21, 8, 'grass'), g(22, 8, 'grass'), g(23, 8, 'quicksand'), g(24, 8, 'quicksand'));
-            // Row 9: Dirt under row 8 platforms, vine wall col 0
-            b.push(g(0, 9, 'vine'));
-            b.push(g(2, 9, 'dirt'), g(3, 9, 'dirt'), g(4, 9, 'dirt'), g(5, 9, 'dirt'), g(6, 9, 'dirt'));
-            b.push(g(7, 9, 'dirt'), g(8, 9, 'dirt'), g(9, 9, 'dirt'), g(10, 9, 'dirt'));
-            b.push(g(17, 9, 'dirt'));
-            b.push(g(20, 9, 'dirt'), g(21, 9, 'dirt'), g(22, 9, 'dirt'), g(23, 9, 'dirt'), g(24, 9, 'dirt'));
-            // Row 10: Vine wall col 0, lava pit cols 11-16
-            b.push(g(0, 10, 'vine'));
-            b.push(g(11, 10, 'lava'), g(12, 10, 'lava'), g(13, 10, 'lava'), g(14, 10, 'lava'), g(15, 10, 'lava'), g(16, 10, 'lava'));
-            // Row 11: Vine wall col 0, dirt under lava pit
-            b.push(g(0, 11, 'vine'));
-            b.push(g(11, 11, 'dirt'), g(12, 11, 'dirt'), g(13, 11, 'dirt'), g(14, 11, 'dirt'), g(15, 11, 'dirt'), g(16, 11, 'dirt'));
-            // Rows 12-14: Vine wall col 0
-            b.push(g(0, 12, 'vine'));
-            b.push(g(0, 13, 'vine'));
-            b.push(g(0, 14, 'vine'));
-            // Row 15: Vine wall col 0, fake grass, grass, hanging vine, fake grass, trigger/spike, mud, vine
-            b.push(g(0, 15, 'vine'), g(1, 15, 'fake_grass'));
-            b.push(g(4, 15, 'grass'), g(5, 15, 'grass'));
-            b.push(hangingVine(8, 15, 2, 2.0));
-            b.push(g(11, 15, 'fake_grass'), g(12, 15, 'fake_grass'), g(13, 15, 'fake_grass'), g(14, 15, 'fake_grass'), g(15, 15, 'fake_grass'));
-            b.push(g(16, 15, 'trigger'), g(17, 15, 'spike'));
-            b.push(g(18, 15, 'mud'), g(19, 15, 'mud'));
-            b.push(g(20, 15, 'vine'));
-            // Row 16: Dirt and vine
-            b.push(g(1, 16, 'dirt'));
-            b.push(g(4, 16, 'dirt'), g(5, 16, 'dirt'));
-            b.push(g(11, 16, 'dirt'), g(12, 16, 'dirt'), g(13, 16, 'dirt'), g(14, 16, 'dirt'), g(15, 16, 'dirt'), g(16, 16, 'dirt'));
-            b.push(g(20, 16, 'vine'));
-            // Row 17: Vine at col 20, Portal at col 24 (3-high: rows 15,16,17)
-            b.push(g(20, 17, 'vine'));
-            b.push(portal(24, 15));
-            // Row 18: Lava floor with vine and dirt at edges
-            b.push(g(0, 18, 'lava'), g(1, 18, 'lava'), g(2, 18, 'lava'), g(3, 18, 'lava'), g(4, 18, 'lava'));
-            b.push(g(5, 18, 'lava'), g(6, 18, 'lava'), g(7, 18, 'lava'), g(8, 18, 'lava'), g(9, 18, 'lava'));
-            b.push(g(10, 18, 'lava'), g(11, 18, 'lava'), g(12, 18, 'lava'), g(13, 18, 'lava'), g(14, 18, 'lava'));
-            b.push(g(15, 18, 'lava'), g(16, 18, 'lava'), g(17, 18, 'lava'), g(18, 18, 'lava'), g(19, 18, 'lava'));
-            b.push(g(20, 18, 'vine'));
-            b.push(g(21, 18, 'lava'), g(22, 18, 'lava'), g(23, 18, 'lava'));
-            b.push(g(24, 18, 'dirt'));
-            return b;
-        },
-        // L14 — JUNGLE: "fog rising" from GitHub Gird file (exact match)
-        // G=grass, D=dirt, F=fake_grass, S=spike, V=spike_visible, T=trigger, L=lava, N=vine, H=hanging_vine, M=mud, B=thorn_bush, Q=quicksand, P=portal
-        () => {
-            let b = [];
-            // Row 0: Portal at col 16 (3-high: rows -2,-1,0 but we place at row 0)
-            b.push(portal(16, 0));
-            // Row 2: Dirt at col 16, grass at col 20
-            b.push(g(16, 2, 'dirt'));
-            b.push(g(20, 2, 'grass'));
-            // Row 4: Grass at col 24
-            b.push(g(24, 4, 'grass'));
-            // Row 5: Fake grass bridge, grass, hanging vine, lava, grass
-            b.push(g(9, 5, 'fake_grass'), g(10, 5, 'fake_grass'), g(11, 5, 'fake_grass'), g(12, 5, 'grass'));
-            b.push(hangingVine(16, 5, 2, 2.0));
-            b.push(g(19, 5, 'lava'), g(20, 5, 'grass'), g(21, 5, 'grass'));
-            // Row 6: Grass at cols 3 and 6
-            b.push(g(3, 6, 'grass'), g(6, 6, 'grass'));
-            // Row 9: Grass at col 0
-            b.push(g(0, 9, 'grass'));
-            // Row 11: Spike/trigger combo, grass, spike visible
-            b.push(g(4, 11, 'spike'), g(5, 11, 'trigger'), g(6, 11, 'grass'), g(7, 11, 'grass'));
-            b.push(g(8, 11, 'spike_visible'), g(9, 11, 'spike_visible'), g(10, 11, 'spike_visible'), g(11, 11, 'grass'));
-            // Row 12: Dirt under row 11
-            b.push(g(6, 12, 'dirt'), g(7, 12, 'dirt'), g(8, 12, 'dirt'), g(9, 12, 'dirt'), g(10, 12, 'dirt'), g(11, 12, 'dirt'));
-            // Row 13: Grass at col 15
-            b.push(g(15, 13, 'grass'));
-            // Rows 14-17: Vine wall at col 18
-            b.push(g(18, 14, 'vine'));
-            b.push(g(18, 15, 'vine'));
-            b.push(g(18, 16, 'vine'));
-            b.push(g(18, 17, 'vine'));
-            // Row 18: Ground floor — grass, spike visible, fake grass, lava, vine
-            b.push(g(0, 18, 'grass'), g(1, 18, 'grass'), g(2, 18, 'grass'));
-            b.push(g(3, 18, 'spike_visible'), g(4, 18, 'spike_visible'), g(5, 18, 'spike_visible'));
-            b.push(g(6, 18, 'grass'), g(7, 18, 'grass'), g(8, 18, 'fake_grass'), g(9, 18, 'fake_grass'), g(10, 18, 'grass'), g(11, 18, 'grass'));
-            b.push(g(12, 18, 'lava'), g(13, 18, 'lava'), g(14, 18, 'lava'));
-            b.push(g(15, 18, 'grass'), g(16, 18, 'grass'));
-            b.push(g(17, 18, 'lava'), g(18, 18, 'vine'));
-            b.push(g(19, 18, 'lava'), g(20, 18, 'lava'), g(21, 18, 'lava'), g(22, 18, 'lava'), g(23, 18, 'lava'), g(24, 18, 'lava'));
-            return b;
-        },
-        // L15 — JUNGLE: "wind: right side" from GitHub Gird file (exact match)
-        // G=grass, D=dirt, F=fake_grass, S=spike, V=spike_visible, T=trigger, L=lava, N=vine, H=hanging_vine, M=mud, B=thorn_bush, Q=quicksand, P=portal
-        () => {
-            let b = [];
-            // Row 0: Portal at col 0 (3-high: rows -2,-1,0 but we place at row 0)
-            b.push(portal(0, 0));
-            // Row 1: Long platform — dirt, fake grass, spike visible, grass, thorn bush, fake grass, mud
-            b.push(g(0, 1, 'dirt'), g(1, 1, 'fake_grass'), g(2, 1, 'fake_grass'), g(3, 1, 'fake_grass'), g(4, 1, 'fake_grass'), g(5, 1, 'fake_grass'), g(6, 1, 'fake_grass'), g(7, 1, 'fake_grass'), g(8, 1, 'fake_grass'), g(9, 1, 'fake_grass'));
-            b.push(g(10, 1, 'spike_visible'), g(11, 1, 'spike_visible'), g(12, 1, 'spike_visible'));
-            b.push(g(13, 1, 'grass'), g(14, 1, 'grass'), g(15, 1, 'grass'), g(16, 1, 'grass'));
-            b.push(g(17, 1, 'thorn_bush'));
-            b.push(g(19, 1, 'fake_grass'), g(20, 1, 'mud'), g(21, 1, 'mud'), g(22, 1, 'mud'));
-            // Rows 2-4: Dirt at col 0, vine wall at col 24
-            b.push(g(0, 2, 'dirt'));
-            b.push(g(24, 2, 'vine'));
-            b.push(g(24, 3, 'vine'));
-            b.push(g(24, 4, 'vine'));
-            // Row 6: Complex platform — lava, grass, fake grass, thorn bushes, grass, trigger/spike, spike visible
-            b.push(g(2, 6, 'lava'), g(3, 6, 'lava'), g(4, 6, 'grass'), g(5, 6, 'grass'));
-            b.push(g(6, 6, 'fake_grass'), g(7, 6, 'fake_grass'), g(8, 6, 'fake_grass'), g(9, 6, 'fake_grass'), g(10, 6, 'fake_grass'), g(11, 6, 'fake_grass'));
-            b.push(g(12, 6, 'thorn_bush'), g(13, 6, 'thorn_bush'), g(14, 6, 'thorn_bush'));
-            b.push(g(15, 6, 'grass'), g(16, 6, 'grass'), g(17, 6, 'grass'));
-            b.push(g(18, 6, 'trigger'), g(19, 6, 'spike'));
-            b.push(g(21, 6, 'grass'), g(22, 6, 'spike_visible'), g(23, 6, 'spike_visible'));
-            // Rows 7-12: Vine wall at col 0
-            b.push(g(0, 7, 'vine'));
-            b.push(g(0, 8, 'vine'));
-            b.push(g(0, 9, 'vine'));
-            b.push(g(0, 10, 'vine'));
-            b.push(g(0, 11, 'vine'));
-            b.push(g(0, 12, 'vine'));
-            // Row 13: Platform — mud, thorn bushes, grass, spike/trigger, mud, quicksand, grass, hanging vine
-            b.push(g(0, 13, 'vine'), g(2, 13, 'mud'), g(3, 13, 'thorn_bush'), g(4, 13, 'thorn_bush'));
-            b.push(g(5, 13, 'grass'), g(6, 13, 'grass'), g(7, 13, 'grass'));
-            b.push(g(8, 13, 'spike'), g(9, 13, 'trigger'), g(10, 13, 'mud'));
-            b.push(g(11, 13, 'quicksand'), g(12, 13, 'quicksand'), g(13, 13, 'quicksand'));
-            b.push(g(14, 13, 'grass'), g(15, 13, 'grass'), g(16, 13, 'grass'), g(17, 13, 'grass'), g(18, 13, 'grass'));
-            b.push(hangingVine(21, 13, 2, 2.0));
-            // Rows 15-17: Vine wall at col 24
-            b.push(g(24, 15, 'vine'));
-            b.push(g(24, 16, 'vine'));
-            b.push(g(24, 17, 'vine'));
-            // Row 18: Ground floor — fake grass, trigger/spike, grass, lava, vine
-            b.push(g(0, 18, 'grass'), g(1, 18, 'fake_grass'), g(2, 18, 'fake_grass'), g(3, 18, 'fake_grass'), g(4, 18, 'fake_grass'), g(5, 18, 'fake_grass'), g(6, 18, 'fake_grass'), g(7, 18, 'fake_grass'), g(8, 18, 'fake_grass'), g(9, 18, 'fake_grass'), g(10, 18, 'fake_grass'), g(11, 18, 'fake_grass'), g(12, 18, 'fake_grass'), g(13, 18, 'fake_grass'), g(14, 18, 'fake_grass'), g(15, 18, 'fake_grass'), g(16, 18, 'fake_grass'));
-            b.push(g(17, 18, 'trigger'), g(18, 18, 'spike'));
-            b.push(g(19, 18, 'grass'), g(20, 18, 'grass'));
-            b.push(g(21, 18, 'lava'), g(22, 18, 'lava'));
-            b.push(g(24, 18, 'vine'));
-            return b;
-        },
-        // L16 — ICE MOUNTAINS: "First Frost" (intro to ice)
-        () => {
-            let b = [];
-            // Row 1: Grass at start
-            b.push(g(0, 17, 'frozen_grass'), g(1, 17, 'frozen_grass'), g(2, 17, 'frozen_grass'), g(3, 17, 'frozen_grass'));
-            // Row 5: Ice bridge — learn to slide!
-            b.push(g(5, 14, 'frozen_grass'));
-            b.push(g(6, 14, 'ice'), g(7, 14, 'ice'), g(8, 14, 'ice'), g(9, 14, 'ice'), g(10, 14, 'ice'));
-            b.push(g(11, 14, 'frozen_grass'));
-            // Row 8: Snow platform
-            b.push(g(13, 12, 'snow'), g(14, 12, 'snow'), g(15, 12, 'snow'));
-            b.push(g(16, 12, 'frozen_grass'));
-            // Row 10: Ice with frozen grass islands
-            b.push(g(5, 10, 'frozen_grass'));
-            b.push(g(6, 10, 'ice'), g(7, 10, 'ice'));
-            b.push(g(8, 10, 'frozen_grass'));
-            b.push(g(9, 10, 'ice'), g(10, 10, 'ice'));
-            b.push(g(11, 10, 'frozen_grass'));
-            // Row 7: More ice
-            b.push(g(14, 8, 'frozen_grass'));
-            b.push(g(15, 8, 'ice'), g(16, 8, 'ice'), g(17, 8, 'ice'));
-            b.push(g(18, 8, 'frozen_grass'));
-            // Row 4: Platform near portal
-            b.push(g(20, 5, 'frozen_grass'), g(21, 5, 'frozen_grass'));
-            b.push(g(22, 5, 'snow'));
-            // Row 2: Platform with portal
-            b.push(g(20, 3, 'frozen_grass'), g(21, 3, 'frozen_grass'), g(22, 3, 'frozen_grass'));
-            b.push(portal(22, 1));
-            // Row 17: Ground with some snow
-            b.push(g(4, 17, 'snow'), g(5, 17, 'snow'));
-            b.push(g(6, 17, 'frozen_grass'), g(7, 17, 'frozen_grass'));
-            b.push(g(12, 17, 'frozen_grass'), g(13, 17, 'frozen_grass'));
-            b.push(g(19, 17, 'frozen_grass'), g(20, 17, 'frozen_grass'), g(21, 17, 'frozen_grass'), g(22, 17, 'frozen_grass'));
-            return b;
-        },
-        // L17 — ICE MOUNTAINS: "Snowdrift" (snow + ice + fake ice)
-        () => {
-            let b = [];
-            // Row 17: Spawn ground
-            b.push(g(0, 17, 'frozen_grass'), g(1, 17, 'frozen_grass'), g(2, 17, 'frozen_grass'));
-            // Row 15: Snow drift
-            b.push(g(4, 15, 'snow'), g(5, 15, 'snow'), g(6, 15, 'snow'), g(7, 15, 'snow'));
-            b.push(g(8, 15, 'frozen_grass'));
-            // Row 13: Ice with fake ice
-            b.push(g(10, 13, 'frozen_grass'));
-            b.push(g(11, 13, 'fake_ice'), g(12, 13, 'fake_ice'), g(13, 13, 'ice'), g(14, 13, 'ice'));
-            b.push(g(15, 13, 'frozen_grass'));
-            // Row 11: Snow and ice mix
-            b.push(g(3, 11, 'frozen_grass'), g(4, 11, 'snow'));
-            b.push(g(5, 11, 'ice'), g(6, 11, 'ice'), g(7, 11, 'ice'));
-            b.push(g(8, 11, 'frozen_grass'));
-            // Row 9: Icicle zone
-            b.push(g(0, 9, 'icicle'));
-            b.push(g(2, 9, 'frozen_grass'), g(3, 9, 'frozen_grass'));
-            b.push(g(5, 9, 'icicle'));
-            b.push(g(7, 9, 'frozen_grass'), g(8, 9, 'ice'), g(9, 9, 'ice'));
-            b.push(g(10, 9, 'frozen_grass'));
-            // Row 7: Higher platforms
-            b.push(g(14, 7, 'frozen_grass'), g(15, 7, 'ice'), g(16, 7, 'ice'));
-            b.push(g(17, 7, 'fake_ice'));
-            b.push(g(18, 7, 'frozen_grass'));
-            // Row 5: Snow landing
-            b.push(g(20, 5, 'snow'), g(21, 5, 'snow'), g(22, 5, 'frozen_grass'));
-            // Row 3: Portal platform
-            b.push(g(20, 3, 'frozen_grass'), g(21, 3, 'frozen_grass'), g(22, 3, 'frozen_grass'));
-            b.push(portal(22, 1));
-            // Row 17: More ground
-            b.push(g(3, 17, 'snow'), g(4, 17, 'frozen_grass'));
-            b.push(g(9, 17, 'frozen_grass'), g(10, 17, 'frozen_grass'));
-            b.push(g(15, 17, 'frozen_grass'), g(16, 17, 'snow'));
-            b.push(g(19, 17, 'frozen_grass'), g(20, 17, 'frozen_grass'), g(21, 17, 'frozen_grass'), g(22, 17, 'frozen_grass'));
-            return b;
-        },
-        // L18 — ICE MOUNTAINS: "Icicle Caves" (icicle gauntlet)
-        () => {
-            let b = [];
-            // Row 17: Spawn
-            b.push(g(0, 17, 'frozen_grass'), g(1, 17, 'frozen_grass'), g(2, 17, 'frozen_grass'));
-            // Icicles hanging from ceiling rows
-            b.push(g(3, 0, 'icicle'), g(7, 0, 'icicle'), g(11, 0, 'icicle'), g(15, 0, 'icicle'), g(19, 0, 'icicle'), g(23, 0, 'icicle'));
-            // Row 2: More icicles
-            b.push(g(1, 2, 'icicle'), g(5, 2, 'icicle'), g(9, 2, 'icicle'), g(13, 2, 'icicle'), g(17, 2, 'icicle'), g(21, 2, 'icicle'));
-            // Row 15: First platform
-            b.push(g(4, 15, 'frozen_grass'), g(5, 15, 'ice'), g(6, 15, 'ice'), g(7, 15, 'frozen_grass'));
-            // Row 13: Ice bridge over danger
-            b.push(g(9, 13, 'frozen_grass'), g(10, 13, 'ice'), g(11, 13, 'ice'), g(12, 13, 'ice'), g(13, 13, 'frozen_grass'));
-            // Row 11: Icicle dodging
-            b.push(g(4, 11, 'icicle'));
-            b.push(g(6, 11, 'frozen_grass'), g(7, 11, 'snow'), g(8, 11, 'frozen_grass'));
-            b.push(g(14, 11, 'icicle'));
-            b.push(g(16, 11, 'frozen_grass'), g(17, 11, 'frozen_grass'));
-            // Row 9: Mixed platforms
-            b.push(g(0, 9, 'frozen_grass'), g(1, 9, 'ice'), g(2, 9, 'frozen_grass'));
-            b.push(g(10, 9, 'frozen_grass'), g(11, 9, 'fake_ice'), g(12, 9, 'fake_ice'), g(13, 9, 'frozen_grass'));
-            // Row 7: Ice bridge
-            b.push(g(15, 7, 'frozen_grass'), g(16, 7, 'ice'), g(17, 7, 'ice'), g(18, 7, 'frozen_grass'));
-            // Row 5: Final approach
-            b.push(g(20, 5, 'frozen_grass'), g(21, 5, 'snow'), g(22, 5, 'frozen_grass'));
-            // Row 3: Portal
-            b.push(g(20, 3, 'frozen_grass'), g(21, 3, 'frozen_grass'), g(22, 3, 'frozen_grass'));
-            b.push(portal(22, 1));
-            // Ground
-            b.push(g(3, 17, 'snow'), g(8, 17, 'frozen_grass'), g(9, 17, 'frozen_grass'));
-            b.push(g(14, 17, 'frozen_grass'), g(15, 17, 'frozen_grass'));
-            b.push(g(19, 17, 'frozen_grass'), g(20, 17, 'frozen_grass'), g(21, 17, 'frozen_grass'), g(22, 17, 'frozen_grass'));
-            return b;
-        },
-        // L19 — ICE MOUNTAINS: "Blizzard Peak" (blizzard wind + ice + reduced visibility)
-        () => {
-            let b = [];
-            // Row 17: Spawn
-            b.push(g(22, 17, 'frozen_grass'), g(23, 17, 'frozen_grass'), g(24, 17, 'frozen_grass'));
-            // Row 15: Platform (must fight wind going left)
-            b.push(g(19, 15, 'frozen_grass'), g(20, 15, 'ice'), g(21, 15, 'frozen_grass'));
-            // Row 13: Ice bridge against wind
-            b.push(g(14, 13, 'frozen_grass'), g(15, 13, 'ice'), g(16, 13, 'ice'), g(17, 13, 'ice'), g(18, 13, 'frozen_grass'));
-            // Row 11: Snow platforms
-            b.push(g(10, 11, 'snow'), g(11, 11, 'snow'), g(12, 11, 'frozen_grass'));
-            // Row 9: Icicle + ice
-            b.push(g(5, 9, 'icicle'), g(8, 9, 'icicle'));
-            b.push(g(6, 9, 'frozen_grass'), g(7, 9, 'ice'));
-            b.push(g(9, 9, 'frozen_grass'));
-            // Row 7: Platform
-            b.push(g(3, 7, 'frozen_grass'), g(4, 7, 'fake_ice'), g(5, 7, 'fake_ice'), g(6, 7, 'frozen_grass'));
-            // Row 5: Ice against wind
-            b.push(g(0, 5, 'frozen_grass'), g(1, 5, 'ice'), g(2, 5, 'ice'), g(3, 5, 'frozen_grass'));
-            // Row 3: Portal
-            b.push(g(0, 3, 'frozen_grass'), g(1, 3, 'frozen_grass'), g(2, 3, 'frozen_grass'));
-            b.push(portal(0, 1));
-            // More ground
-            b.push(g(13, 17, 'frozen_grass'), g(14, 17, 'snow'), g(15, 17, 'frozen_grass'));
-            b.push(g(8, 17, 'frozen_grass'), g(9, 17, 'frozen_grass'));
-            b.push(g(3, 17, 'frozen_grass'), g(4, 17, 'frozen_grass'));
-            return b;
-        },
-        // L20 — ICE MOUNTAINS: "Frozen Summit" (all ice mechanics combined - final challenge)
-        () => {
-            let b = [];
-            // Row 17: Spawn
-            b.push(g(0, 17, 'frozen_grass'), g(1, 17, 'frozen_grass'), g(2, 17, 'frozen_grass'));
-            // Icicles on ceiling
-            b.push(g(4, 0, 'icicle'), g(8, 0, 'icicle'), g(12, 0, 'icicle'), g(16, 0, 'icicle'), g(20, 0, 'icicle'));
-            // Row 15: Start platform with snow
-            b.push(g(3, 15, 'snow'), g(4, 15, 'snow'), g(5, 15, 'frozen_grass'));
-            // Row 13: Ice bridge with fake ice
-            b.push(g(7, 13, 'frozen_grass'), g(8, 13, 'fake_ice'), g(9, 13, 'ice'), g(10, 13, 'ice'), g(11, 13, 'frozen_grass'));
-            // Row 11: Icicle gauntlet
-            b.push(g(3, 11, 'icicle'), g(5, 11, 'icicle'), g(7, 11, 'icicle'));
-            b.push(g(4, 11, 'frozen_grass'), g(6, 11, 'frozen_grass'));
-            b.push(g(13, 11, 'frozen_grass'), g(14, 11, 'snow'), g(15, 11, 'frozen_grass'));
-            // Row 9: Ice and snow
-            b.push(g(17, 9, 'frozen_grass'), g(18, 9, 'ice'), g(19, 9, 'ice'), g(20, 9, 'fake_ice'), g(21, 9, 'frozen_grass'));
-            // Row 7: Wind fight platform
-            b.push(g(14, 7, 'frozen_grass'), g(15, 7, 'ice'), g(16, 7, 'ice'), g(17, 7, 'frozen_grass'));
-            // Row 5: Final ice bridge
-            b.push(g(10, 5, 'frozen_grass'), g(11, 5, 'ice'), g(12, 5, 'ice'), g(13, 5, 'ice'), g(14, 5, 'frozen_grass'));
-            // Row 3: Icicle dodging
-            b.push(g(6, 3, 'icicle'), g(8, 3, 'icicle'));
-            b.push(g(7, 3, 'frozen_grass'), g(9, 3, 'frozen_grass'));
-            // Row 1: Portal platform
-            b.push(g(22, 1, 'frozen_grass'), g(23, 1, 'frozen_grass'), g(24, 1, 'frozen_grass'));
-            b.push(portal(22, 0));
-            // Ground
-            b.push(g(3, 17, 'frozen_grass'), g(4, 17, 'snow'), g(5, 17, 'frozen_grass'));
-            b.push(g(10, 17, 'frozen_grass'), g(11, 17, 'frozen_grass'));
-            b.push(g(16, 17, 'frozen_grass'), g(17, 17, 'snow'), g(18, 17, 'frozen_grass'));
-            b.push(g(22, 17, 'frozen_grass'), g(23, 17, 'frozen_grass'), g(24, 17, 'frozen_grass'));
-            return b;
-        }
+        [
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            "......................P..",
+            "......GG......GG.........",
+            ".........................",
+            "GGGGLL..LLGGLL..TS.GGGGGG",
+            ".........................",
+        ],
+        // L6
+        [
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            "....P....................",
+            ".........................",
+            ".....FGGSTVVGGFGG........",
+            ".........................",
+            "...................GG....",
+            ".........................",
+            ".......................GF",
+            ".........................",
+            "GGGGGVVVVGTS...FGGGGGLLLG",
+            "D..D........VVVVVVVVVVV..",
+            ".........................",
+            ".........................",
+            ".........................",
+        ],
+        // L7
+        [
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            "...............P.........",
+            ".........................",
+            ".........................",
+            "...............FST.......",
+            "....................G....",
+            "...................GGF...",
+            ".........................",
+            ".......................GF",
+            "...F.G.F.................",
+            "GGGGGGGGGG.GGTSFG..GGGGGG",
+            ".........LLLLLLLLLL.VVVVV",
+            ".........................",
+            ".........................",
+            ".........................",
+        ],
+        // L8
+        [
+            ".................P.......",
+            ".........................",
+            ".................GFG.....",
+            ".............FG..........",
+            "............GTSF.........",
+            ".........FG..............",
+            ".........................",
+            "........GF...............",
+            ".........................",
+            ".....GFTSF...............",
+            ".........................",
+            "..FF.....................",
+            ".........................",
+            ".........................",
+            "GGGLLLLLLLLLLLLLLLLLLLLLL",
+            "DDDDDDDDDDDDDDDDDDDDDDDDD",
+            "DDDDDDDDDDDDDDDDDDDDDDDDD",
+            "DDDDDDDDDDDDDDDDDDDDDDDDD",
+            "DDDDDDDDDDDDDDDDDDDDDDDDD",
+        ],
+        // L9
+        [
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            "P........................",
+            ".........................",
+            ".........................",
+            "G........................",
+            "..GG.............GG......",
+            ".....STFFFFGGGG.....GG...",
+            ".........................",
+            ".........................",
+            "GGGFFFFFFFFFFTSTS.G.LL.GG",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".........................",
+        ],
+        // L10
+        [
+            ".........................",
+            ".........................",
+            "P........................",
+            ".........................",
+            ".........................",
+            ".........................",
+            "......................GGG",
+            ".........................",
+            "..............G...GF.....",
+            ".........................",
+            ".......FFGGTS............",
+            ".........................",
+            "...GG.LLGFG.LLGG.........",
+            ".........................",
+            ".................GVVG.GFG",
+            ".........................",
+            "..........GGG.LLGGGGGGGGG",
+            "GGGGGVVGGGLLLGGGGGGGGGGGG",
+            ".........................",
+        ],
+        // L11
+        [
+            ".........................",
+            ".........................",
+            ".........................",
+            "...G.....................",
+            "....GFFMMG..H..G.VVFMFTS.",
+            ".........................",
+            "GF.....................N.",
+            ".......................N.",
+            "....FG.................N.",
+            ".......................N.",
+            "GF.....................N.",
+            ".......................N.",
+            ".......................N.",
+            "....FG.................N.",
+            ".......................P.",
+            "GF.......................",
+            ".........................",
+            ".......................LL",
+            "LLGGGGLLLLLLLLLLLLLLLLLLL",
+        ],
+        // L12
+        [
+            ".........................",
+            ".........................",
+            "...................P.....",
+            ".........................",
+            ".........................",
+            ".........................",
+            ".....................MMM.",
+            "........................N",
+            "........................N",
+            "........................N",
+            "..GFFFFFFFVVGGTS..H..GMGN",
+            "N........................",
+            "N........................",
+            "N........................",
+            "NGL.H...................N",
+            ".......GVFFFQQQBFFFG..G.N",
+            "........................N",
+            "........................N",
+            "GGGVVVGFTSGG...H...GFFFMN",
+        ],
+        // L13
+        [
+            ".........................",
+            "LLLLLLLLLLLLLLLLLLLLLLN..",
+            "DDDDDDDDDDDDDDDDDDDDDDN..",
+            "......................N..",
+            "......................N..",
+            ".......................V.",
+            ".........................",
+            "V........................",
+            "N.GLLGSTGFV.H...BGMMGGGQQ",
+            "N.DDDDDDDDD......D..DDDDD",
+            "N..........LLLLLL........",
+            "N..........DDDDDD........",
+            "N........................",
+            "N........................",
+            "N........................",
+            "NF..GG..H..FFFFFTSMMN...P",
+            ".D..DD.....DDDDDD...N....",
+            "....................N....",
+            "LLLLLGLLLLLLLLLLLLLLNLLLD",
+        ],
+        // L14
+        [
+            "................P........",
+            ".........................",
+            "................D...G....",
+            ".........................",
+            "........................G",
+            ".........FFFG...H..LGG...",
+            "...G..G..................",
+            ".........................",
+            ".........................",
+            "G........................",
+            ".........................",
+            "....STGGVVVG.............",
+            "......DDDDDD.............",
+            "...............G.........",
+            "..................N......",
+            "..................N......",
+            "..................N......",
+            "..................N......",
+            "GGGVVVGGFFGGLLLGGLNLLLLLL",
+        ],
+        // L15
+        [
+            "P........................",
+            "DFFFFFFFFFVVVGGGGB.FMMM..",
+            "D.......................N",
+            "........................N",
+            "........................N",
+            ".........................",
+            "..LLGGFFFFFFBBBGGGTS.GVV.",
+            "N........................",
+            "N........................",
+            "N........................",
+            "N........................",
+            "N........................",
+            "N........................",
+            "N.MBBGGGSTMQQQGGGGG..H...",
+            ".........................",
+            "........................N",
+            "........................N",
+            "........................N",
+            "GFFFFFFFFFFFFFFFFTSGGLL.N",
+        ],
+        // L16
+        [
+            "C..CC.CCC.C...C.CC.C.C.C.",
+            ".........................",
+            ".........................",
+            "......P..................",
+            ".........................",
+            ".......OOOOOOSTIIIII.....",
+            "....................II...",
+            "........................N",
+            "........................N",
+            "........................N",
+            "........................N",
+            "........................N",
+            "........................N",
+            ".........................",
+            "...........IIIRRRTSIIILLL",
+            ".........................",
+            "........C................",
+            ".........................",
+            "EEEEEE...................",
+        ],
+        // L17
+        [
+            ".C...C...C...C...C...CP..",
+            ".........................",
+            "......................EEE",
+            ".........................",
+            "................EIIRE....",
+            ".........................",
+            "............COOE.........",
+            ".........................",
+            "....LEIIIRIELL...........",
+            ".........................",
+            "..OOE...EIRE.............",
+            ".........................",
+            "..............EIIRE......",
+            ".........................",
+            "......CECEC..............",
+            ".........................",
+            "...EOE.....EIE...........",
+            "EEE......................",
+            ".........................",
+        ],
+        // L18
+        [
+            "..C..C..C..C..C..C..C.PC.",
+            ".........................",
+            ".....................EEEE",
+            ".........................",
+            "....................N....",
+            "....................N....",
+            "..................EINE...",
+            "....................N....",
+            ".............EIIRE.......",
+            ".........................",
+            ".......EECOEC............",
+            ".........................",
+            "...OOEIIE................",
+            "..N......................",
+            "..N.ERE..................",
+            "..N......................",
+            "..N....EO................",
+            "EEE......................",
+            ".........................",
+        ],
+        // L19
+        [
+            "P..C....C....C....C....C.",
+            ".........................",
+            "EEE......................",
+            ".........................",
+            "....EIIRE................",
+            ".........................",
+            ".........OCE.............",
+            ".........................",
+            ".............EIIIRE......",
+            ".........................",
+            "....................EIRE.",
+            ".........................",
+            "................OEIEC....",
+            ".........................",
+            "..........LEIIREL........",
+            ".........................",
+            "...................EOE...",
+            "......................EEE",
+            ".........................",
+        ],
+        // L20
+        [
+            "..C..C..C..C..C..C..C.PC.",
+            ".........................",
+            ".....................EEEE",
+            ".........................",
+            ".................EIIRE...",
+            ".........................",
+            "................N........",
+            "................N........",
+            "..............OENE.......",
+            "................N........",
+            "........EECECEC..........",
+            ".........................",
+            "..LEIIRIELL..............",
+            ".........................",
+            ".EIROCE..................",
+            ".........................",
+            ".......EOE...............",
+            "EEE......................",
+            ".........................",
+        ],
     ];
+
+    // Parse a 2D grid array of characters into block objects
+    function parseGrid(grid) {
+        let blocks = [];
+        for(let r=0; r<grid.length && r<19; r++) {
+            for(let c=0; c<grid[r].length && c<25; c++) {
+                let ch = grid[r][c];
+                if(ch === '.') continue;
+                switch(ch){
+                    case 'G': blocks.push(g(c,r,'grass')); break;
+                    case 'D': blocks.push(g(c,r,'dirt')); break;
+                    case 'F': blocks.push(g(c,r,'fake_grass')); break;
+                    case 'S': blocks.push(g(c,r,'spike')); break;
+                    case 'V': blocks.push(g(c,r,'spike_visible')); break;
+                    case 'T': blocks.push(g(c,r,'trigger')); break;
+                    case 'L': blocks.push(g(c,r,'lava')); break;
+                    case 'N': blocks.push(g(c,r,'vine')); break;
+                    case 'H': blocks.push(hangingVine(c,r,2,2.0)); break;
+                    case 'M': blocks.push(g(c,r,'mud')); break;
+                    case 'B': blocks.push(g(c,r,'thorn_bush')); break;
+                    case 'Q': blocks.push(g(c,r,'quicksand')); break;
+                    case 'I': blocks.push(g(c,r,'ice')); break;
+                    case 'O': blocks.push(g(c,r,'snow')); break;
+                    case 'E': blocks.push(g(c,r,'frozen_grass')); break;
+                    case 'R': blocks.push(g(c,r,'fake_ice')); break;
+                    case 'C': blocks.push(g(c,r,'icicle')); break;
+                    case 'P': blocks.push(portal(c,r)); break;
+                    case 'W': blocks.push(g(c,r,'flower')); break;
+                }
+            }
+        }
+        return blocks;
+    }
 
     function generateBlocks(lvl) {
         if(isCustomLevel) return customBlocks;
-        if(lvl <= 20) return levelsData[lvl-1]();
+        // Check for edited levels saved in localStorage
+        if(lvl >= 1 && lvl <= 20) {
+            let editedLevels = {};
+            try { editedLevels = JSON.parse(localStorage.getItem('pixelObbyEditedLevels') || '{}'); } catch(e) { localStorage.removeItem('pixelObbyEditedLevels'); }
+            let saved = editedLevels['L' + lvl];
+            if(saved && saved.grid && Array.isArray(saved.grid) && saved.grid.length === 19) {
+                // Handle both string format ("GGG..." ) and old array format (['G','G','G',...])
+                let gridStrs;
+                if(typeof saved.grid[0] === 'string') {
+                    gridStrs = saved.grid;
+                } else if(Array.isArray(saved.grid[0])) {
+                    // Old format: convert array-of-arrays to array-of-strings
+                    gridStrs = saved.grid.map(row => row.join(''));
+                } else {
+                    // Unknown format — clear it
+                    delete editedLevels['L' + lvl];
+                    localStorage.setItem('pixelObbyEditedLevels', JSON.stringify(editedLevels));
+                    gridStrs = null;
+                }
+                if(gridStrs) {
+                    let blocks = parseGrid(gridStrs);
+                    if(blocks.length > 0) return blocks;
+                    // Invalid grid data — clear this level from storage
+                    delete editedLevels['L' + lvl];
+                    localStorage.setItem('pixelObbyEditedLevels', JSON.stringify(editedLevels));
+                }
+            } else if(saved) {
+                // Old format data — clear it
+                delete editedLevels['L' + lvl];
+                localStorage.setItem('pixelObbyEditedLevels', JSON.stringify(editedLevels));
+            }
+        }
+        if(lvl >= 1 && lvl <= 20) return parseGrid(levelGrids[lvl-1]);
         let b = []; for(let i=0; i<25; i++) b.push(g(i, 17, 'grass')); b.push(portal(22, 14)); return b;
     }
 
@@ -976,7 +922,48 @@
         return 1; // 1 = right, -1 = left
     }
 
-    // isOnVine removed — vines are now solid platforms, not climbable
+    // --- SOUND EFFECTS ---
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+    function playSound(type) {
+        try {
+            if(!audioCtx) audioCtx = new AudioCtx();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            gain.gain.value = 0.15;
+            if(type === 'jump') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.1);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+                osc.start(audioCtx.currentTime);
+                osc.stop(audioCtx.currentTime + 0.15);
+            } else if(type === 'death') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.3);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+                osc.start(audioCtx.currentTime);
+                osc.stop(audioCtx.currentTime + 0.35);
+            } else if(type === 'portal') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(500, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.3);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+                osc.start(audioCtx.currentTime);
+                osc.stop(audioCtx.currentTime + 0.4);
+            } else if(type === 'crumble') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.2);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
+                osc.start(audioCtx.currentTime);
+                osc.stop(audioCtx.currentTime + 0.25);
+            }
+        } catch(e) {}
+    }
 
     function startGame(lvl) {
         if(lvl !== 99) isCustomLevel = false;
@@ -984,7 +971,13 @@
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
         document.getElementById('hud').style.display = 'flex';
         document.getElementById('level-text').innerText = "LEVEL " + lvl;
+        document.getElementById('death-text').innerText = "DEATHS: " + deathCount;
         if(isMobile) document.getElementById('mobile-controls').classList.add('mobile-visible');
+
+        levelStartTime = Date.now();
+        showLevelComplete = false;
+        levelCompleteTimer = 0;
+        levelCompleteDeaths = 0;
 
         player.hasWallClimb = false;
         levelBlocks = generateBlocks(lvl);
@@ -1051,6 +1044,7 @@
         for(let b of levelBlocks) {
             if(b.origType === 'spike') b.type = 'spike';
             if(b.origType === 'fake_grass') { b.type = 'fake_grass'; b.timer = 0; }
+            if(b.origType === 'fake_ice') { b.type = 'fake_ice'; b.timer = 0; }
             if(b.origType === 'quicksand') { b.type = 'quicksand'; b.sinkTimer = 0; }
             if(b.origType === 'icicle') { b.icicleTimer = Math.floor(Math.random() * 60); }
             b.timer = 0;
@@ -1063,7 +1057,6 @@
 
     function doJump(entity) {
         if(!entity.canJump) return;
-        // Vines are solid platforms now — no special climbing jump logic
         if(entity.grounded) {
             let jf = JUMP_FORCE;
             if(entity.standingOn === 'mud') jf *= MUD_JUMP_MULT;
@@ -1071,10 +1064,16 @@
             if(entity.standingOn === 'snow') jf *= SNOW_JUMP_MULT;
             entity.vy = jf; entity.grounded = false; entity.canJump = false;
             entity.targetScaleX = 0.6; entity.targetScaleY = 1.4;
-            if(entity === player) spawnParticles(entity.x+entity.w/2, entity.y+entity.h, '#fff', 4);
+            if(entity === player) { spawnParticles(entity.x+entity.w/2, entity.y+entity.h, '#fff', 4); playSound('jump'); }
             // Reset quicksand timer on the block player is jumping from
             for(let b of levelBlocks) { if(b.type === 'quicksand' && player.x + player.w > b.x && player.x < b.x + b.w) b.sinkTimer = 0; }
-            // Vines are solid platforms — no auto-grab needed
+        } else if(entity.climbing && entity === player) {
+            // Jump off vine
+            entity.climbing = false;
+            entity.vy = JUMP_FORCE;
+            entity.vx = (entity.onVineDir || 1) * 5;
+            entity.canJump = false;
+            if(entity === player) playSound('jump');
         } else if(entity.onWall !== 0) {
             entity.vy = JUMP_FORCE; entity.vx = WALL_JUMP_X * -entity.onWall; entity.onWall = 0; entity.canJump = false;
             entity.targetScaleX = 0.6; entity.targetScaleY = 1.4;
@@ -1083,8 +1082,9 @@
     }
 
     function isSolidType(type) {
-        return type === 'grass' || type === 'dirt' || type === 'flower' || type === 'fake_grass' || type === 'trigger' || type === 'vine' || type === 'mud' || type === 'hanging_vine' || type === 'quicksand' || type === 'ice' || type === 'snow' || type === 'frozen_grass' || type === 'fake_ice';
+        return type === 'grass' || type === 'dirt' || type === 'flower' || type === 'fake_grass' || type === 'trigger' || type === 'mud' || type === 'hanging_vine' || type === 'quicksand' || type === 'ice' || type === 'snow' || type === 'frozen_grass' || type === 'fake_ice';
     }
+    // Vine is NOT solid — player passes through and grabs it via overlap detection
     // isSolidForClimbing removed — vines are now solid like other blocks
 
     function isWallType(type) {
@@ -1096,8 +1096,8 @@
         for(let b of blocks) {
             if(b.type !== 'vine' && b.type !== 'hanging_vine') continue;
             // Check if player overlaps the vine block (generous detection)
-            if(entity.x + entity.w > b.x + 2 && entity.x < b.x + b.w - 2 &&
-               entity.y + entity.h > b.y + 2 && entity.y < b.y + b.h - 2) {
+            if(entity.x + entity.w > b.x + 6 && entity.x < b.x + b.w - 6 &&
+               entity.y + entity.h > b.y + 6 && entity.y < b.y + b.h - 6) {
                 return b;
             }
         }
@@ -1117,7 +1117,13 @@
             }
             if((wallAhead || !groundAhead) && entity.grounded) doJump(entity);
             if(entity.onWall !== 0) doJump(entity);
-            if(entity.x > GAME_W) { entity.x = 0; entity.y = 16*B - entity.h; entity.vx = SPEED; entity.vy = 0; entity.grounded = false; }
+            if(entity.x > GAME_W) {
+                // Ghost wraps around — use level spawn position so it doesn't end up in lava/off ledge
+                let sr = levelSpawnRow[currentLevel] || 17;
+                let sc = levelSpawnCol[currentLevel] || 2;
+                entity.x = sc * B; entity.y = sr * B - entity.h;
+                entity.vx = SPEED; entity.vy = 0; entity.grounded = false;
+            }
         } else {
             // Check if on ice for slippery movement
             let onIce = entity.grounded && entity.standingOn === 'ice';
@@ -1163,22 +1169,26 @@
         if(entity.vy > 16) entity.vy = 16;
 
         // --- VINE CLIMBING MECHANIC ---
+        // Vine is NOT solid — player passes through and auto-grabs when overlapping
         // Right = climb up, Left = climb down, No input = slow slide down
-        // Can also jump off vine
-        if(entity === player && (entity.climbing || !entity.grounded)) {
-            let vineBlock = isOnVine(entity, blocks);
-            if(vineBlock && !entity.climbing) {
-                // Auto-grab vine when overlapping it while airborne
-                entity.climbing = true;
-                entity.onVineDir = (entity.x + entity.w/2 < vineBlock.x + vineBlock.w/2) ? 1 : -1;
+        // Jump = leap off vine
+        if(entity === player) {
+            if(!entity.climbing) {
+                // Auto-grab vine when overlapping it (while airborne or walking into one)
+                let vineBlock = isOnVine(entity, blocks);
+                if(vineBlock && vineBlock.type === 'vine') {
+                    entity.climbing = true;
+                    entity.onVineDir = (entity.x + entity.w/2 < vineBlock.x + vineBlock.w/2) ? 1 : -1;
+                }
             }
             if(entity.climbing) {
                 let vineBlock2 = isOnVine(entity, blocks);
-                if(vineBlock2) {
+                if(vineBlock2 && vineBlock2.type === 'vine') {
                     // Anchor player horizontally to the vine center
                     let vineCenterX = vineBlock2.x + vineBlock2.w/2 - entity.w/2;
                     entity.x += (vineCenterX - entity.x) * 0.3; // Smooth snap to vine
                     entity.vx = 0;
+                    entity.grounded = false; // Climbing = not grounded
 
                     // Right key = climb UP
                     if(keys.right) {
@@ -1194,14 +1204,6 @@
                     else {
                         entity.vy = VINE_SLIDE_SPEED;
                         entity.canJump = true;
-                    }
-
-                    // Jump key = leap off vine (with some sideways momentum)
-                    if(keys.jumpPressed) {
-                        entity.climbing = false;
-                        entity.vy = JUMP_FORCE;
-                        entity.vx = (entity.onVineDir || 1) * 5; // Leap off to the side
-                        keys.jumpPressed = false;
                     }
                 } else {
                     // No longer overlapping a vine — stop climbing
@@ -1242,7 +1244,7 @@
 
         // Mud/quicksand speed already applied above (before position update)
 
-        if(entity.y > GAME_H + 100) { entity.alive = false; if(entity._respawnTimer) clearTimeout(entity._respawnTimer); entity._respawnTimer = setTimeout(() => { if(!entity.alive) respawn(entity); }, 500); }
+        if(entity.y > GAME_H + 100) { entity.alive = false; if(entity===player){deathCount++;document.getElementById('death-text').innerText="DEATHS: "+deathCount;playSound('death');} if(entity._respawnTimer) clearTimeout(entity._respawnTimer); entity._respawnTimer = setTimeout(() => { if(!entity.alive) respawn(entity); }, 500); }
 
         entity.scaleX += (entity.targetScaleX - entity.scaleX) * 0.2;
         entity.scaleY += (entity.targetScaleY - entity.scaleY) * 0.2;
@@ -1264,11 +1266,11 @@
         for(let b of blocks) {
             if(!rectCollide(entity, b)) continue;
 
-            if(b.type === 'lava') { if(entity.alive) { entity.alive = false; setTimeout(() => { if(!entity.alive) respawn(entity); }, 500); } return; }
+            if(b.type === 'lava') { if(entity.alive) { entity.alive = false; if(entity===player){deathCount++;document.getElementById('death-text').innerText="DEATHS: "+deathCount;playSound('death');} setTimeout(() => { if(!entity.alive) respawn(entity); }, 500); } return; }
             if(b.type === 'portal' && entity === player) { nextLevel(); return; }
 
             // Thorn bush: kills on ANY contact from ANY direction
-            if(b.type === 'thorn_bush') { if(entity.alive) { entity.alive = false; setTimeout(() => { if(!entity.alive) respawn(entity); }, 500); } return; }
+            if(b.type === 'thorn_bush') { if(entity.alive) { entity.alive = false; if(entity===player){deathCount++;document.getElementById('death-text').innerText="DEATHS: "+deathCount;playSound('death');} setTimeout(() => { if(!entity.alive) respawn(entity); }, 500); } return; }
 
             // Spike_visible: only kill from TOP contact, not side/bottom
             if(b.type === 'spike_visible') {
@@ -1278,14 +1280,14 @@
                     const spikeTop = b.y;
                     // Kill only if player center is ABOVE spike top and bottom barely crosses into spike
                     if(playerCenterY < spikeTop && playerBottom > spikeTop && playerBottom < spikeTop + 16 && entity.vy > 0) {
-                        if(entity.alive) { entity.alive = false; setTimeout(() => { if(!entity.alive) respawn(entity); }, 500); }
+                        if(entity.alive) { entity.alive = false; if(entity===player){deathCount++;document.getElementById('death-text').innerText="DEATHS: "+deathCount;playSound('death');} setTimeout(() => { if(!entity.alive) respawn(entity); }, 500); }
                     }
                 }
                 continue; // Don't treat as solid, keep checking other blocks
             }
 
             // Spike_up: kills on any contact (active/extended spike)
-            if(b.type === 'spike_up') { if(entity.alive) { entity.alive = false; setTimeout(() => { if(!entity.alive) respawn(entity); }, 500); } return; }
+            if(b.type === 'spike_up') { if(entity.alive) { entity.alive = false; if(entity===player){deathCount++;document.getElementById('death-text').innerText="DEATHS: "+deathCount;playSound('death');} setTimeout(() => { if(!entity.alive) respawn(entity); }, 500); } return; }
 
             // Trigger: activates adjacent hidden spikes
             if(b.type === 'trigger' && axis === 'y' && entity.vy >= 0) {
@@ -1298,16 +1300,8 @@
 
             // Solid block collision
             if(isSolidType(b.type)) {
-                // Vine: Grab from side to start climbing (player only)
-                if(b.type === 'vine' && entity === player && axis === 'x' && !entity.climbing) {
-                    entity.climbing = true;
-                    entity.onVineDir = (entity.x + entity.w/2 < b.x + b.w/2) ? 1 : -1;
-                    entity.vy = 0;
-                    entity.vx = 0;
-                    continue; // Don't push player out — they're climbing!
-                }
-                // Vine/hanging_vine: Skip collision if player is actively climbing
-                if((b.type === 'vine' || b.type === 'hanging_vine') && entity === player && entity.climbing) continue;
+                // Hanging vine: Skip collision if player is actively climbing (they're on a normal vine)
+                if(b.type === 'hanging_vine' && entity === player && entity.climbing) continue;
 
                 if(axis === 'x') { if(entity.vx > 0) { entity.x = b.x - entity.w; entity.vx = 0; } else if(entity.vx < 0) { entity.x = b.x + b.w; entity.vx = 0; } }
                 if(axis === 'y') {
@@ -1321,8 +1315,22 @@
     function rectCollide(r1, r2) { return r1.x < r2.x + r2.w && r1.x + r1.w > r2.x && r1.y < r2.y + r2.h && r1.y + r1.h > r2.y; }
 
     function nextLevel() {
+        playSound('portal');
+        // Save best time for this level
+        let elapsed = ((Date.now() - levelStartTime) / 1000).toFixed(1);
+        let lvlKey = 'L' + currentLevel;
+        if(!bestTimes[lvlKey] || parseFloat(elapsed) < parseFloat(bestTimes[lvlKey])) {
+            bestTimes[lvlKey] = elapsed;
+            localStorage.setItem('pixelObbyBestTimes', JSON.stringify(bestTimes));
+        }
+        // Show level complete screen
+        levelCompleteDeaths = deathCount;
+        showLevelComplete = true;
+        levelCompleteTimer = 120; // 2 seconds at 60fps
+
         currentLevel++;
-        if(currentLevel > 20) { alert("You beat all 20 Levels!"); returnToMenu(); return; }
+        if(currentLevel > maxLevel) maxLevel = currentLevel;
+        if(currentLevel > 20) { showLevelComplete = false; alert("You beat all 20 Levels!"); returnToMenu(); return; }
         // Clean transition — reset all velocity
         player.vx = 0;
         player.vy = 0;
@@ -1354,6 +1362,9 @@
             ctx.fillStyle = '#3E8E41'; ctx.fillRect(x+4 + shakeX, y+2 + shakeY, 2, 6); ctx.fillRect(x+12 + shakeX, y+4 + shakeY, 2, 4); ctx.fillRect(x+24 + shakeX, y+1 + shakeY, 2, 7);
             // Small crack marks — the only visual difference from real grass!
             ctx.fillStyle = '#6D4C2A'; ctx.fillRect(x+8 + shakeX, y+4 + shakeY, 2, 3); ctx.fillRect(x+20 + shakeX, y+3 + shakeY, 2, 4);
+            // Subtle shimmer to hint it's fake
+            let fg_shimmer = Math.sin(Date.now() / 200 + b.x * 0.15) * 0.06;
+            ctx.fillStyle = 'rgba(255,255,200,' + (0.03 + Math.abs(fg_shimmer)) + ')'; ctx.fillRect(x + shakeX, y + shakeY, B, B);
         }
         else if(b.type === 'dirt') {
             ctx.fillStyle = '#8B5A2B'; ctx.fillRect(x, y, B, B);
@@ -1397,17 +1408,20 @@
             ctx.fillStyle = '#388E3C'; ctx.fillRect(x+13, y+6, 4, 3);
         }
         else if(b.type === 'vine') {
-            // Vine — vertical stem with leaves on sides (original style, solid platform)
-            ctx.fillStyle = '#1B5E20'; ctx.fillRect(x + 12, y, 8, B);
-            // Leaves on left side
-            ctx.fillStyle = '#4CAF50'; ctx.fillRect(x + 4, y + 2, 12, 6); ctx.fillRect(x + 6, y + 14, 10, 6);
-            // Leaves on right side
-            ctx.fillStyle = '#388E3C'; ctx.fillRect(x + 16, y + 8, 10, 6); ctx.fillRect(x + 14, y + 22, 12, 6);
-            // Vine stem detail
-            ctx.fillStyle = '#2E7D32'; ctx.fillRect(x + 14, y, 4, B);
-            // Small grip marks
-            ctx.fillStyle = '#66BB6A'; ctx.fillRect(x + 10, y + 4, 4, 3); ctx.fillRect(x + 18, y + 12, 4, 3); ctx.fillRect(x + 10, y + 20, 4, 3);
-            ctx.strokeStyle = '#0D3B0D'; ctx.lineWidth = 1; ctx.strokeRect(x + 12, y, 8, B);
+            // Vine — climbable, non-solid. Draw as hanging vine with leaves
+            ctx.fillStyle = '#2E7D32'; 
+            ctx.fillRect(x + 13, y, 6, B);
+            // Leaves on alternating sides
+            ctx.fillStyle = '#4CAF50'; 
+            ctx.fillRect(x + 6, y + 2, 10, 5);
+            ctx.fillStyle = '#388E3C'; 
+            ctx.fillRect(x + 16, y + 10, 10, 5);
+            ctx.fillStyle = '#4CAF50'; 
+            ctx.fillRect(x + 4, y + 18, 12, 5);
+            // Stem detail
+            ctx.fillStyle = '#1B5E20'; ctx.fillRect(x + 14, y, 3, B);
+            // Grip indicators (small bright dots)
+            ctx.fillStyle = '#81C784'; ctx.fillRect(x + 12, y + 5, 3, 3); ctx.fillRect(x + 18, y + 14, 3, 3); ctx.fillRect(x + 12, y + 22, 3, 3);
         }
         else if(b.type === 'mud') {
             ctx.fillStyle = '#5D4037'; ctx.fillRect(x, y, B, B);
@@ -1488,13 +1502,21 @@
         }
         else if(b.type === 'fake_ice') {
             // Fake ice grass — looks like frozen_grass but with subtle cracks
-            let shakeX = 0, shakeY = 0;
+            // Shake offset for crumbling (reuses outer shakeX/shakeY)
+            if(b.timer > CRUMBLE_SHAKE_START && b.timer <= CRUMBLE_FALL_START) {
+                shakeX = (Math.random() - 0.5) * 4;
+                shakeY = (Math.random() - 0.5) * 2;
+            }
+            // Shimmer effect — subtle flicker to hint it's fake
+            let shimmer = Math.sin(Date.now() / 150 + b.x * 0.1) * 0.08;
             ctx.fillStyle = '#5D4037'; ctx.fillRect(x + shakeX, y + shakeY, B, B);
             ctx.fillStyle = '#4DB6AC'; ctx.fillRect(x + shakeX, y + shakeY, B, 8);
             ctx.strokeStyle = '#00897B'; ctx.lineWidth = 1; ctx.strokeRect(x + shakeX, y + shakeY, B, B);
             ctx.fillStyle = '#80CBC4'; ctx.fillRect(x+4 + shakeX, y+2 + shakeY, 2, 5); ctx.fillRect(x+12 + shakeX, y+3 + shakeY, 2, 4); ctx.fillRect(x+22 + shakeX, y+1 + shakeY, 2, 6);
-            // Crack marks — the only visual difference from real frozen_grass!
+            // Crack marks — visual difference from real frozen_grass!
             ctx.fillStyle = '#3E2723'; ctx.fillRect(x+8 + shakeX, y+4 + shakeY, 2, 3); ctx.fillRect(x+18 + shakeX, y+3 + shakeY, 2, 4);
+            // Shimmer overlay — subtle flicker to hint it's fake
+            ctx.fillStyle = 'rgba(255,255,255,' + (0.05 + Math.abs(shimmer)) + ')'; ctx.fillRect(x + shakeX, y + shakeY, B, B);
         }
         else if(b.type === 'icicle') {
             // Icicle — hanging stalactite that periodically falls
@@ -1619,6 +1641,7 @@
                             b.type = 'air';
                             spawnParticles(b.x + B/2, b.y + B/2, '#4DB6AC', 8);
                             spawnParticles(b.x + B/2, b.y + B/2, '#81D4FA', 4);
+                            playSound('crumble');
                         }
                     }
                 }
@@ -1638,6 +1661,7 @@
                             b.type = 'air';
                             spawnParticles(b.x + B/2, b.y + B/2, '#8B5A2B', 8);
                             spawnParticles(b.x + B/2, b.y + B/2, '#4CAF50', 4);
+                            playSound('crumble');
                         }
                     }
                 }
@@ -1658,7 +1682,7 @@
                 // Visual sink: nudge player down slightly (collision resolves, so player stays on top but appears to sink)
                 // Speed is already reduced in updateEntity (vx *= 0.35)
                 if(onQuicksand.sinkTimer > QUICKSAND_DEATH_TIMER) {
-                    if(player.alive) { player.alive = false; spawnParticles(player.x + player.w/2, player.y + player.h/2, '#8B6914', 10); setTimeout(() => { if(!player.alive) respawn(player); }, 500); }
+                    if(player.alive) { player.alive = false; deathCount++; document.getElementById('death-text').innerText="DEATHS: "+deathCount; playSound('death'); spawnParticles(player.x + player.w/2, player.y + player.h/2, '#8B6914', 10); setTimeout(() => { if(!player.alive) respawn(player); }, 500); }
                 }
             }
         }
@@ -1720,7 +1744,7 @@
                 // Kill player if hit
                 if(player.alive && player.x + player.w > p.x + 4 && player.x < p.x + p.w - 4 &&
                    player.y + player.h > p.y + 4 && player.y < p.y + p.h - 4) {
-                    player.alive = false;
+                    player.alive = false; deathCount++; document.getElementById('death-text').innerText="DEATHS: "+deathCount; playSound('death');
                     spawnParticles(player.x + player.w/2, player.y + player.h/2, '#81D4FA', 12);
                     setTimeout(() => { if(!player.alive) respawn(player); }, 500);
                 }
@@ -1768,7 +1792,7 @@
                 // Kill player if in strike zone during strike phase
                 if(strike.phase === 'strike' && player.alive) {
                     if(player.x + player.w > strike.x + 4 && player.x < strike.x + B - 4) {
-                        player.alive = false;
+                        player.alive = false; deathCount++; document.getElementById('death-text').innerText="DEATHS: "+deathCount; playSound('death');
                         spawnParticles(player.x + player.w/2, player.y + player.h/2, '#FFEB3B', 12);
                         setTimeout(() => { if(!player.alive) respawn(player); }, 500);
                     }
@@ -1952,7 +1976,7 @@
                 ctx.fillRect(0, fogY + fogHeight * 0.6, GAME_W, fogHeight * 0.4);
                 // Kill player only in DENSE fog (bottom 40%), not just the light edge
                 if(player.alive && player.y + player.h > fogY + fogHeight * 0.6) {
-                    player.alive = false;
+                    player.alive = false; deathCount++; document.getElementById('death-text').innerText="DEATHS: "+deathCount; playSound('death');
                     spawnParticles(player.x + player.w/2, player.y + player.h/2, '#00FF00', 8);
                     setTimeout(() => { if(!player.alive) respawn(player); }, 500);
                 }
@@ -1973,6 +1997,48 @@
             drawEntity(player, '#2196F3');
             particles.forEach(p => { ctx.globalAlpha = p.life / 30; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.size, p.size); });
             ctx.globalAlpha = 1;
+
+            // Level complete overlay
+            if(showLevelComplete && levelCompleteTimer > 0) {
+                levelCompleteTimer--;
+                let alpha = Math.min(1, (120 - levelCompleteTimer) / 20); // Fade in
+                ctx.fillStyle = 'rgba(0,0,0,' + (alpha * 0.75) + ')';
+                ctx.fillRect(0, 0, GAME_W, GAME_H);
+                ctx.fillStyle = 'rgba(76, 175, 80,' + alpha + ')';
+                ctx.font = 'bold 52px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('LEVEL CLEAR!', GAME_W/2, GAME_H/2 - 50);
+                ctx.font = 'bold 24px sans-serif';
+                ctx.fillStyle = 'rgba(255,255,255,' + alpha + ')';
+                let elapsed = ((Date.now() - levelStartTime) / 1000).toFixed(1);
+                ctx.fillText('Time: ' + elapsed + 's', GAME_W/2, GAME_H/2);
+                ctx.fillStyle = 'rgba(244, 67, 54,' + alpha + ')';
+                ctx.fillText('Deaths: ' + levelCompleteDeaths, GAME_W/2, GAME_H/2 + 35);
+                ctx.fillStyle = 'rgba(255,255,255,' + (alpha * 0.6) + ')';
+                ctx.font = 'bold 18px sans-serif';
+                ctx.fillText('Next level starting...', GAME_W/2, GAME_H/2 + 70);
+                ctx.textAlign = 'left';
+            }
+
+            // Vine climbing hint
+            if(player.climbing) {
+                ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                ctx.fillRect(GAME_W/2 - 120, 60, 240, 30);
+                ctx.fillStyle = '#81C784';
+                ctx.font = 'bold 14px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('→ Climb Up  |  ← Climb Down  |  SPACE Jump', GAME_W/2, 80);
+                ctx.textAlign = 'left';
+            }
+
+            // Timer display
+            if(player.alive && !showLevelComplete) {
+                let elapsed = ((Date.now() - levelStartTime) / 1000).toFixed(1);
+                let lvlKey = 'L' + currentLevel;
+                let bestStr = bestTimes[lvlKey] ? (' | Best: ' + bestTimes[lvlKey] + 's') : '';
+                document.getElementById('time-text').style.display = 'block';
+                document.getElementById('time-text').innerText = elapsed + 's' + bestStr;
+            }
         }
         requestAnimationFrame(loop);
     }
@@ -1997,7 +2063,37 @@
     }
     setupTouch('left-btn', 'left'); setupTouch('right-btn', 'right'); setupTouch('jump-btn', 'jump');
 
-    menuBlocks = levelsData[0]();
+    // Auto-purge old-format localStorage data on startup
+    (function cleanOldStorage() {
+        try {
+            let raw = localStorage.getItem('pixelObbyEditedLevels');
+            if(!raw) return;
+            let editedLevels = JSON.parse(raw);
+            let changed = false;
+            for(let key of Object.keys(editedLevels)) {
+                let saved = editedLevels[key];
+                if(!saved || !saved.grid || !Array.isArray(saved.grid) || saved.grid.length !== 19) {
+                    delete editedLevels[key];
+                    changed = true;
+                    continue;
+                }
+                // Convert old array-of-arrays format to array-of-strings
+                if(Array.isArray(saved.grid[0])) {
+                    saved.grid = saved.grid.map(row => row.join(''));
+                    changed = true;
+                } else if(typeof saved.grid[0] !== 'string') {
+                    delete editedLevels[key];
+                    changed = true;
+                }
+            }
+            if(changed) {
+                if(Object.keys(editedLevels).length === 0) localStorage.removeItem('pixelObbyEditedLevels');
+                else localStorage.setItem('pixelObbyEditedLevels', JSON.stringify(editedLevels));
+            }
+        } catch(e) { localStorage.removeItem('pixelObbyEditedLevels'); }
+    })();
+
+    menuBlocks = parseGrid(levelGrids[0]);
     ghost.x = B*2; ghost.y = 16*B - ghost.h;
     loop();
 
@@ -2208,7 +2304,24 @@
       document.getElementById('editor-status').innerText = 'Grid cleared';
     }
 
+    function editorResetLevel(){
+      if(edEditingLevel < 1 || edEditingLevel > 20) {
+        document.getElementById('editor-status').innerText = 'Not editing a game level!';
+        return;
+      }
+      // Remove saved edit from localStorage
+      let editedLevels = {};
+      try { editedLevels = JSON.parse(localStorage.getItem('pixelObbyEditedLevels') || '{}'); } catch(e) {}
+      delete editedLevels['L' + edEditingLevel];
+      localStorage.setItem('pixelObbyEditedLevels', JSON.stringify(editedLevels));
+      // Reload from built-in levelGrids
+      editorLoadLevel(edEditingLevel);
+      document.getElementById('editor-status').innerText = 'Level ' + edEditingLevel + ' reset to original!';
+    }
+
     let edIOMode = 'export';
+    let edEditingLevel = 0; // 0 = new, 1-20 = editing that level
+
     function editorShowIO(mode){
       edIOMode = mode;
       const panel = document.getElementById('editor-io');
@@ -2224,41 +2337,121 @@
       editorCloseIO();
     }
 
-    function edExport(){
-      let out = '========================================\n           BLOCK LEGEND\n========================================\n\n';
-      edTools.forEach(t => { if(t.id !== 'start') out += '  ' + t.char + '  = ' + t.name + '\n'; });
-      out += '\n========================================\n           LEVEL GRID (25x19)\n========================================\n\n';
-      out += '   ' + Array.from({length:ED_COLS}, (_,i) => String(i).padStart(2,'0')).join(' ') + '\n';
-      for(let r=0; r<ED_ROWS; r++){
-        out += String(r).padStart(2,'0') + '  ' + edGrid[r].join('  ') + '\n';
+    // --- EDIT CURRENT LEVEL ---
+    function editorLoadLevel(lvl) {
+      if(lvl < 0 || lvl > 20) return;
+      if(lvl === 0) { edEditingLevel = 0; editorClear(); document.getElementById('editor-status').innerText = 'New level'; return; }
+      edEditingLevel = lvl;
+      // Load grid directly from levelGrids strings
+      let srcGrid = levelGrids[lvl-1];
+      for(let r=0; r<ED_ROWS; r++) {
+        let row = r < srcGrid.length ? srcGrid[r] : '';
+        for(let c=0; c<ED_COLS; c++) {
+          edGrid[r][c] = c < row.length ? row[c] : '.';
+        }
       }
-      out += '\nSTART: row ' + edStartPos.r + ', col ' + edStartPos.c + '\n';
+      // Check for saved edits in localStorage
+      let editedLevels = {};
+      try { editedLevels = JSON.parse(localStorage.getItem('pixelObbyEditedLevels') || '{}'); } catch(e) { localStorage.removeItem('pixelObbyEditedLevels'); }
+      let saved = editedLevels['L' + lvl];
+      if(saved) {
+        for(let r=0; r<ED_ROWS && r<saved.grid.length; r++) {
+          for(let c=0; c<ED_COLS && c<saved.grid[r].length; c++) {
+            edGrid[r][c] = saved.grid[r][c];
+          }
+        }
+        edStartPos = {r: saved.spawnRow, c: saved.spawnCol};
+      } else {
+        edStartPos = {r: levelSpawnRow[lvl] || 17, c: levelSpawnCol[lvl] || 2};
+      }
+      edUpdate();
+      document.getElementById('editor-status').innerText = 'Editing Level ' + lvl + (saved ? ' (custom)' : '');
+    }
+
+    function editorSaveToCode() {
+      if(edEditingLevel < 1 || edEditingLevel > 20) {
+        document.getElementById('editor-status').innerText = 'Not editing a game level!';
+        return;
+      }
+      let lvl = edEditingLevel;
+      let editedLevels = {};
+      try { editedLevels = JSON.parse(localStorage.getItem('pixelObbyEditedLevels') || '{}'); } catch(e) { localStorage.removeItem('pixelObbyEditedLevels'); }
+      // Save grid as array of strings (same format as levelGrids)
+      let gridData = [];
+      for(let r=0; r<ED_ROWS; r++) { gridData.push(edGrid[r].join('')); }
+      editedLevels['L' + lvl] = {grid: gridData, spawnRow: edStartPos.r, spawnCol: edStartPos.c};
+      localStorage.setItem('pixelObbyEditedLevels', JSON.stringify(editedLevels));
+      document.getElementById('editor-status').innerText = 'Level ' + lvl + ' saved! (persisted)';
+    }
+
+    function edExport(){
+      // Output in the EXACT same format as levelGrids in the script
+      // so user can copy-paste directly into the code
+      let lvlLabel = edEditingLevel > 0 ? (' // L' + edEditingLevel) : '';
+      let out = '';
+      out += '        ' + lvlLabel + '\n';
+      out += '        [\n';
+      for(let r=0; r<ED_ROWS; r++){
+        let comma = r < ED_ROWS - 1 ? ',' : ',';
+        out += '            "' + edGrid[r].join('') + '"' + comma + '\n';
+      }
+      out += '        ],\n';
+      out += '\n// Spawn: row ' + edStartPos.r + ', col ' + edStartPos.c + '\n';
+      out += '// Legend: . = air, G = grass, D = dirt, F = fake_grass, S = spike,\n';
+      out += '//         V = spike_visible, T = trigger, L = lava, N = vine,\n';
+      out += '//         H = hanging_vine, M = mud, B = thorn_bush, Q = quicksand,\n';
+      out += '//         I = ice, O = snow, E = frozen_grass, R = fake_ice,\n';
+      out += '//         C = icicle, P = portal, W = flower\n';
       return out;
     }
 
     function edImport(text){
       const lines = text.split('\n');
-      let inGrid = false;
       let imported = false;
+      let currentRow = 0;
+      
+      // Try code format first: lines like '    "GGGGG..GGG......G..GGGGGG",'
       for(let line of lines){
-        if(line.includes('LEVEL GRID')){ inGrid = true; continue; }
-        if(!inGrid) continue;
-        if(!line.trim() || line.startsWith('=')) continue;
-        if(line.trim().startsWith('00') && line.includes(' 01 ')) continue;
-        if(line.startsWith('START:')){
-          const m = line.match(/row\s+(\d+).*col\s+(\d+)/);
-          if(m) edStartPos = {r:parseInt(m[1]), c:parseInt(m[2])};
+        const m = line.match(/"([.GDFSQVMLNBHIOERCPWT]{25})"/);
+        if(m){
+          if(currentRow < ED_ROWS){
+            for(let c=0; c<ED_COLS; c++) edGrid[currentRow][c] = m[1][c];
+            currentRow++;
+            imported = true;
+          }
           continue;
         }
-        const parts = line.trim().split(/\s+/);
-        if(parts.length >= ED_COLS + 1){
-          const rowNum = parseInt(parts[0]);
-          if(!isNaN(rowNum) && rowNum >= 0 && rowNum < ED_ROWS){
-            for(let c=0; c<ED_COLS; c++){ const ch = parts[c+1]; if(ch && ch.length === 1) edGrid[rowNum][c] = ch; }
-            imported = true;
+        // Also handle START: line
+        if(line.startsWith('START:')){
+          const sm = line.match(/row\s+(\d+).*col\s+(\d+)/);
+          if(sm) edStartPos = {r:parseInt(sm[1]), c:parseInt(sm[2])};
+        }
+      }
+      
+      // If code format didn't work, try visual format
+      if(!imported){
+        let inGrid = false;
+        for(let line of lines){
+          if(line.includes('LEVEL GRID')){ inGrid = true; continue; }
+          if(!inGrid) continue;
+          if(!line.trim() || line.startsWith('=')) continue;
+          if(line.trim().startsWith('00') && line.includes(' 01 ')) continue;
+          if(line.startsWith('START:')){
+            const m = line.match(/row\s+(\d+).*col\s+(\d+)/);
+            if(m) edStartPos = {r:parseInt(m[1]), c:parseInt(m[2])};
+            continue;
+          }
+          const parts = line.trim().split(/\s+/);
+          if(parts.length >= ED_COLS + 1){
+            const rowNum = parseInt(parts[0]);
+            if(!isNaN(rowNum) && rowNum >= 0 && rowNum < ED_ROWS){
+              for(let c=0; c<ED_COLS; c++){ const ch = parts[c+1]; if(ch && ch.length === 1) edGrid[rowNum][c] = ch; }
+              imported = true;
+            }
           }
         }
       }
+      
       edUpdate();
       document.getElementById('editor-status').innerText = imported ? 'Grid imported!' : 'Import failed';
     }
@@ -2325,6 +2518,16 @@
                 <h2>✏️ EDITOR</h2>
                 <div id="editor-status" style="font-size:11px;color:#aaa;white-space:nowrap;flex-shrink:0;">Ready</div>
                 <div style="margin-left:auto;display:flex;gap:5px;flex-shrink:0;">
+                    <label style="font-size:11px;color:#ccc;white-space:nowrap;display:flex;align-items:center;gap:3px;">Edit Lv:
+                        <select id="editor-level-select" style="padding:2px;font-size:11px;background:#333;color:#fff;border:1px solid #555;border-radius:3px;" onchange="editorLoadLevel(parseInt(this.value))">
+                            <option value="0">New</option>
+                            <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+                            <option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
+                            <option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                            <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option>
+                        </select>
+                    </label>
+                    <button class="btn-blue" style="font-size:11px;padding:3px 6px;margin:0;" onclick="editorSaveToCode()">💾 Save</button>
                     <label style="font-size:11px;color:#ccc;white-space:nowrap;display:flex;align-items:center;gap:3px;">Wind:
                         <select id="editor-wind" style="padding:2px;font-size:11px;background:#333;color:#fff;border:1px solid #555;border-radius:3px;">
                             <option value="0">Off</option><option value="1">→</option><option value="-1">←</option>
@@ -2334,6 +2537,7 @@
                     <label style="font-size:11px;color:#ccc;white-space:nowrap;display:flex;align-items:center;gap:3px;"><input type="checkbox" id="editor-fog"> 🌫</label>
                     <label style="font-size:11px;color:#ccc;white-space:nowrap;display:flex;align-items:center;gap:3px;"><input type="checkbox" id="editor-blizzard"> ❄️</label>
                     <button class="btn-grey" style="font-size:13px;padding:5px 8px;margin:0;" onclick="editorClear()">🗑</button>
+                    <button class="btn-grey" style="font-size:11px;padding:3px 6px;margin:0;" onclick="editorResetLevel()">Reset Lv</button>
                     <button class="btn-blue" style="font-size:13px;padding:5px 8px;margin:0;" onclick="editorShowIO('export')">⬆️</button>
                     <button class="btn-blue" style="font-size:13px;padding:5px 8px;margin:0;" onclick="editorShowIO('import')">⬇️</button>
                     <button style="font-size:13px;padding:5px 8px;margin:0;" onclick="editorPlay()">▶</button>
