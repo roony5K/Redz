@@ -216,6 +216,7 @@
         <div class="setting-row"><span>Music</span><div class="toggle-switch active" onclick="toggleSetting(this)"><div class="toggle-knob"></div></div></div>
         <div class="setting-row"><span>Sound</span><div class="toggle-switch active" onclick="toggleSetting(this)"><div class="toggle-knob"></div></div></div>
         <button class="btn-red" onclick="handleResetClick()" style="margin-top: 30px;">RESET PROGRESS</button>
+        <button class="btn-red" onclick="if(confirm('Delete ALL saved data including level edits?')){localStorage.clear();alert('All data cleared! Reload the page.');}" style="font-size:20px;padding:10px 20px;">CLEAR ALL DATA</button>
         <button class="btn-grey" onclick="goBackFromSettings()">BACK</button>
     </div>
     <div id="pause-screen" class="screen">
@@ -877,12 +878,27 @@
             let editedLevels = {};
             try { editedLevels = JSON.parse(localStorage.getItem('pixelObbyEditedLevels') || '{}'); } catch(e) { localStorage.removeItem('pixelObbyEditedLevels'); }
             let saved = editedLevels['L' + lvl];
-            if(saved && saved.grid && Array.isArray(saved.grid) && saved.grid.length === 19 && typeof saved.grid[0] === 'string') {
-                let blocks = parseGrid(saved.grid);
-                if(blocks.length > 0) return blocks;
-                // Invalid grid data — clear this level from storage
-                delete editedLevels['L' + lvl];
-                localStorage.setItem('pixelObbyEditedLevels', JSON.stringify(editedLevels));
+            if(saved && saved.grid && Array.isArray(saved.grid) && saved.grid.length === 19) {
+                // Handle both string format ("GGG..." ) and old array format (['G','G','G',...])
+                let gridStrs;
+                if(typeof saved.grid[0] === 'string') {
+                    gridStrs = saved.grid;
+                } else if(Array.isArray(saved.grid[0])) {
+                    // Old format: convert array-of-arrays to array-of-strings
+                    gridStrs = saved.grid.map(row => row.join(''));
+                } else {
+                    // Unknown format — clear it
+                    delete editedLevels['L' + lvl];
+                    localStorage.setItem('pixelObbyEditedLevels', JSON.stringify(editedLevels));
+                    gridStrs = null;
+                }
+                if(gridStrs) {
+                    let blocks = parseGrid(gridStrs);
+                    if(blocks.length > 0) return blocks;
+                    // Invalid grid data — clear this level from storage
+                    delete editedLevels['L' + lvl];
+                    localStorage.setItem('pixelObbyEditedLevels', JSON.stringify(editedLevels));
+                }
             } else if(saved) {
                 // Old format data — clear it
                 delete editedLevels['L' + lvl];
@@ -2056,7 +2072,16 @@
             let changed = false;
             for(let key of Object.keys(editedLevels)) {
                 let saved = editedLevels[key];
-                if(!saved || !saved.grid || !Array.isArray(saved.grid) || saved.grid.length !== 19 || typeof saved.grid[0] !== 'string') {
+                if(!saved || !saved.grid || !Array.isArray(saved.grid) || saved.grid.length !== 19) {
+                    delete editedLevels[key];
+                    changed = true;
+                    continue;
+                }
+                // Convert old array-of-arrays format to array-of-strings
+                if(Array.isArray(saved.grid[0])) {
+                    saved.grid = saved.grid.map(row => row.join(''));
+                    changed = true;
+                } else if(typeof saved.grid[0] !== 'string') {
                     delete editedLevels[key];
                     changed = true;
                 }
@@ -2279,6 +2304,21 @@
       document.getElementById('editor-status').innerText = 'Grid cleared';
     }
 
+    function editorResetLevel(){
+      if(edEditingLevel < 1 || edEditingLevel > 20) {
+        document.getElementById('editor-status').innerText = 'Not editing a game level!';
+        return;
+      }
+      // Remove saved edit from localStorage
+      let editedLevels = {};
+      try { editedLevels = JSON.parse(localStorage.getItem('pixelObbyEditedLevels') || '{}'); } catch(e) {}
+      delete editedLevels['L' + edEditingLevel];
+      localStorage.setItem('pixelObbyEditedLevels', JSON.stringify(editedLevels));
+      // Reload from built-in levelGrids
+      editorLoadLevel(edEditingLevel);
+      document.getElementById('editor-status').innerText = 'Level ' + edEditingLevel + ' reset to original!';
+    }
+
     let edIOMode = 'export';
     let edEditingLevel = 0; // 0 = new, 1-20 = editing that level
 
@@ -2336,28 +2376,32 @@
       let lvl = edEditingLevel;
       let editedLevels = {};
       try { editedLevels = JSON.parse(localStorage.getItem('pixelObbyEditedLevels') || '{}'); } catch(e) { localStorage.removeItem('pixelObbyEditedLevels'); }
+      // Save grid as array of strings (same format as levelGrids)
       let gridData = [];
-      for(let r=0; r<ED_ROWS; r++) { let row = []; for(let c=0; c<ED_COLS; c++) row.push(edGrid[r][c]); gridData.push(row); }
+      for(let r=0; r<ED_ROWS; r++) { gridData.push(edGrid[r].join('')); }
       editedLevels['L' + lvl] = {grid: gridData, spawnRow: edStartPos.r, spawnCol: edStartPos.c};
       localStorage.setItem('pixelObbyEditedLevels', JSON.stringify(editedLevels));
       document.getElementById('editor-status').innerText = 'Level ' + lvl + ' saved! (persisted)';
     }
 
     function edExport(){
-      let out = '========================================\n           BLOCK LEGEND\n========================================\n\n';
-      edTools.forEach(t => { if(t.id !== 'start') out += '  ' + t.char + '  = ' + t.name + '\n'; });
-      out += '\n========================================\n    LEVEL GRID (25x19) — Visual\n========================================\n\n';
-      out += '   ' + Array.from({length:ED_COLS}, (_,i) => String(i).padStart(2,'0')).join(' ') + '\n';
+      // Output in the EXACT same format as levelGrids in the script
+      // so user can copy-paste directly into the code
+      let lvlLabel = edEditingLevel > 0 ? (' // L' + edEditingLevel) : '';
+      let out = '';
+      out += '        ' + lvlLabel + '\n';
+      out += '        [\n';
       for(let r=0; r<ED_ROWS; r++){
-        out += String(r).padStart(2,'0') + '  ' + edGrid[r].join('  ') + '\n';
+        let comma = r < ED_ROWS - 1 ? ',' : ',';
+        out += '            "' + edGrid[r].join('') + '"' + comma + '\n';
       }
-      out += '\nSTART: row ' + edStartPos.r + ', col ' + edStartPos.c + '\n';
-      out += '\n========================================\n    CODE FORMAT (copy into levelGrids)\n========================================\n\n';
-      out += '[\n';
-      for(let r=0; r<ED_ROWS; r++){
-        out += '    "' + edGrid[r].join('') + '",\n';
-      }
-      out += '],\n';
+      out += '        ],\n';
+      out += '\n// Spawn: row ' + edStartPos.r + ', col ' + edStartPos.c + '\n';
+      out += '// Legend: . = air, G = grass, D = dirt, F = fake_grass, S = spike,\n';
+      out += '//         V = spike_visible, T = trigger, L = lava, N = vine,\n';
+      out += '//         H = hanging_vine, M = mud, B = thorn_bush, Q = quicksand,\n';
+      out += '//         I = ice, O = snow, E = frozen_grass, R = fake_ice,\n';
+      out += '//         C = icicle, P = portal, W = flower\n';
       return out;
     }
 
@@ -2493,6 +2537,7 @@
                     <label style="font-size:11px;color:#ccc;white-space:nowrap;display:flex;align-items:center;gap:3px;"><input type="checkbox" id="editor-fog"> 🌫</label>
                     <label style="font-size:11px;color:#ccc;white-space:nowrap;display:flex;align-items:center;gap:3px;"><input type="checkbox" id="editor-blizzard"> ❄️</label>
                     <button class="btn-grey" style="font-size:13px;padding:5px 8px;margin:0;" onclick="editorClear()">🗑</button>
+                    <button class="btn-grey" style="font-size:11px;padding:3px 6px;margin:0;" onclick="editorResetLevel()">Reset Lv</button>
                     <button class="btn-blue" style="font-size:13px;padding:5px 8px;margin:0;" onclick="editorShowIO('export')">⬆️</button>
                     <button class="btn-blue" style="font-size:13px;padding:5px 8px;margin:0;" onclick="editorShowIO('import')">⬇️</button>
                     <button style="font-size:13px;padding:5px 8px;margin:0;" onclick="editorPlay()">▶</button>
