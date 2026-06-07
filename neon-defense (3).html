@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>NEON DEFENSE — Cyberpunk Tower Defense</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #050510; overflow: hidden; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #ccc; user-select: none; -webkit-user-select: none; }
+#game-container { width: 100vw; height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
+#hud { display: none; align-items: center; justify-content: space-between; padding: 8px 10px; background: #0c0c1e; border-bottom: 2px solid #1a1a3a; font-size: 12px; flex-shrink: 0; flex-wrap: wrap; gap: 6px; min-height: 40px; }
+#hud.active { display: flex; }
+#hud-left { display: flex; align-items: center; gap: 12px; }
+.hud-level { color: #00f0ff; font-weight: 700; }
+.hud-gold { color: #fbbf24; }
+.hud-lives { color: #f87171; }
+.hud-wave { color: #a855f7; }
+#placing-bar { display: none; align-items: center; gap: 8px; padding: 4px 12px; background: #0d0d2a; border-bottom: 1px solid #1a1a3a; font-size: 12px; flex-shrink: 0; }
+#placing-bar.active { display: flex; }
+#placing-name { font-weight: 700; }
+#placing-hint { color: #666; }
+#canvas-wrap { flex: 1; position: relative; }
+canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 10; background: rgba(0,0,0,0.85); text-align: center; padding: 20px; overflow-y: auto; }
+#overlay.hidden { display: none; }
+#overlay h1 { font-size: 2.4rem; font-weight: 900; color: #00f0ff; text-shadow: 0 0 30px #00f0ff88; letter-spacing: 4px; margin-bottom: 4px; }
+@media(min-width:640px) { #overlay h1 { font-size: 3.2rem; } }
+#overlay h2 { font-size: 2.5rem; font-weight: 900; margin-bottom: 8px; }
+#overlay p { color: #888; margin-bottom: 20px; font-size: 1rem; }
+#overlay .subtitle { color: #a855f7; font-size: 1.2rem; margin-bottom: 28px; }
+.btn { padding: 12px 28px; border: none; border-radius: 8px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: all 0.15s; }
+.btn:hover { transform: scale(1.05); filter: brightness(1.1); }
+.btn-cyan { background: #00f0ff; color: #000; box-shadow: 0 0 20px #00f0ff44; }
+.btn-green { background: #00ff88; color: #000; box-shadow: 0 0 16px #00ff8844; }
+.btn-red { background: #ff0044; color: #fff; }
+.btn-yellow { background: #ffaa00; color: #000; }
+.btn-sm { padding: 6px 14px; font-size: 12px; }
+#help-btn { background: #1a1a3a; color: #00f0ff; border: none; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
+#help-btn:hover { background: #2a2a4a; }
+#tower-panel { display: none; flex-shrink: 0; background: #0c0c1e; border-top: 2px solid #1e1e3e; padding: 8px 6px calc(16px + env(safe-area-inset-bottom, 0px)) 6px; min-height: 90px; }
+#tower-panel.active { display: block; }
+#tower-row { display: flex; align-items: stretch; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.tower-btn { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 8px; border-radius: 10px; border: 2px solid #333; background: #151520; cursor: pointer; transition: all 0.15s; min-width: 72px; min-height: 72px; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.tower-btn:active:not(.locked) { transform: scale(0.95); }
+.tower-btn:hover:not(.locked) { border-color: inherit; background: #1a1a2a; }
+.tower-btn.selected { border-color: var(--tc); background: color-mix(in srgb, var(--tc) 10%, #111); box-shadow: 0 0 16px var(--tc); }
+.tower-btn.locked { opacity: 0.35; cursor: not-allowed; }
+.tower-btn .dot { width: 28px; height: 28px; border-radius: 50%; margin-bottom: 4px; }
+.tower-btn .name { font-size: 11px; font-weight: 700; margin-bottom: 2px; line-height: 1.2; }
+.tower-btn .cost { font-size: 11px; color: #fbbf24; font-weight: 600; }
+.tower-btn .desc { font-size: 8px; color: #666; display: none; margin-top: 2px; }
+@media(min-width:640px) { .tower-btn { min-width: 92px; min-height: 84px; } .tower-btn .dot { width: 30px; height: 30px; } .tower-btn .name { font-size: 12px; } .tower-btn .cost { font-size: 12px; } .tower-btn .desc { display: block; } #hud { font-size: 14px; padding: 6px 14px; } }
+#wave-float { display: none; position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 5; }
+#wave-float.active { display: block; }
+#wave-float-btn { padding: 10px 24px; background: #00ff88; color: #000; font-weight: 700; border-radius: 12px; border: none; cursor: pointer; font-size: 14px; box-shadow: 0 0 20px #00ff8866, 0 2px 8px rgba(0,0,0,0.5); touch-action: manipulation; -webkit-tap-highlight-color: transparent; white-space: nowrap; }
+#wave-float-btn:active { transform: scale(0.95); }
+#wave-float-status { padding: 10px 24px; color: #ffaa00; font-weight: 700; font-size: 14px; animation: pulse 1s infinite; background: rgba(10,10,26,0.9); border-radius: 12px; border: 1px solid #ffaa0044; white-space: nowrap; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+#help-overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.8); z-index: 20; padding: 16px; }
+#help-overlay.active { display: flex; }
+#help-box { background: #0a0a2a; border: 1px solid #1a1a3a; border-radius: 8px; padding: 24px; max-width: 420px; width: 100%; }
+#help-box h3 { color: #00f0ff; font-weight: 700; font-size: 18px; margin-bottom: 12px; }
+#help-box p { font-size: 13px; margin-bottom: 6px; line-height: 1.6; }
+#help-box .step { color: #fbbf24; }
+#help-box .section { color: #00f0ff; font-weight: 600; margin-top: 10px; }
+#help-box kbd { background: #222; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+#help-box hr { border: none; border-top: 1px solid #333; margin: 8px 0; }
+#help-close { margin-top: 16px; width: 100%; padding: 8px; background: #1a1a3a; color: #00f0ff; border: none; border-radius: 6px; cursor: pointer; }
+#help-close:hover { background: #2a2a4a; }
+.level-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-width: 580px; width: 100%; margin: 12px auto 0; }
+@media(min-width:480px) { .level-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); } }
+.level-card { background: #0d0d2a; border: 2px solid #1a1a3a; border-radius: 12px; padding: 12px 8px; cursor: pointer; transition: all 0.2s; text-align: center; }
+.level-card:hover { border-color: #00f0ff; background: #111133; transform: translateY(-2px); box-shadow: 0 0 16px #00f0ff33; }
+.level-card .lv-num { font-size: 10px; color: #666; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+.level-card .lv-name { font-size: 13px; font-weight: 700; margin: 3px 0; }
+.level-card .lv-diff { font-size: 10px; }
+.level-card .lv-info { font-size: 9px; color: #555; margin-top: 3px; }
+.diff-easy { color: #00ff88; }
+.diff-med { color: #ffaa00; }
+.diff-hard { color: #ff6600; }
+.diff-extreme { color: #ff0055; }
+.diff-insane { color: #ff00ff; }
+.diff-nightmare { color: #ff0000; text-shadow: 0 0 6px #ff0000; }
+.diff-hell { color: #ff0000; text-shadow: 0 0 10px #ff0000, 0 0 20px #ff4400; }
+.diff-void { color: #8800ff; text-shadow: 0 0 10px #8800ff, 0 0 20px #ff00ff; }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <div id="hud">
+    <div id="hud-left">
+      <span class="hud-level" id="hud-level">LV.1</span>
+      <span class="hud-gold" id="hud-gold">&#x1F4B0; 300</span>
+      <span class="hud-lives" id="hud-lives">&#x2764;&#xFE0F; 20</span>
+      <span class="hud-wave" id="hud-wave">Wave 1/5</span>
+    </div>
+    <button id="help-btn" onclick="toggleHelp()">? Help</button>
+  </div>
+  <div id="placing-bar">
+    <span style="color:#888">Placing:</span>
+    <span id="placing-name"></span>
+    <span class="hud-gold" id="placing-cost"></span>
+    <span id="placing-hint">- Click grid to place, ESC to cancel</span>
+  </div>
+  <div id="canvas-wrap">
+    <canvas id="canvas"></canvas>
+    <div id="wave-float">
+      <button id="wave-float-btn" onclick="startWave()">SEND WAVE 1</button>
+    </div>
+    <div id="overlay">
+      <div>
+        <h1 style="color:#00f0ff">NEON DEFENSE</h1>
+        <p class="subtitle">Cyberpunk Tower Defense</p>
+        <div class="level-grid" id="level-grid"></div>
+      </div>
+    </div>
+  </div>
+  <div id="tower-panel">
+    <div id="tower-row"></div>
+  </div>
+  <div id="help-overlay" onclick="toggleHelp()">
+    <div id="help-box" onclick="event.stopPropagation()">
+      <h3>HOW TO PLAY</h3>
+      <p><span class="step">1.</span> Select a tower type from the bottom panel</p>
+      <p><span class="step">2.</span> Click/tap on the grid to place it</p>
+      <p><span class="step">3.</span> Press SPACE or tap "Send Wave" to start</p>
+      <p><span class="step">4.</span> Enemies follow the dark path - don't let them through!</p>
+      <p><span class="step">5.</span> Earn gold from kills to buy more towers</p>
+      <hr>
+      <p class="section">Keyboard Shortcuts:</p>
+      <p><kbd>1-8</kbd> Select tower type</p>
+      <p><kbd>ESC</kbd> Deselect tower</p>
+      <p><kbd>P</kbd> Pause / Resume</p>
+      <p><kbd>SPACE</kbd> Send next wave</p>
+      <p><kbd>H</kbd> Toggle help</p>
+      <button id="help-close" onclick="toggleHelp()">GOT IT</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== GAME ENGINE =====
+const GRID_COLS = 20, GRID_ROWS = 13;
+
+const TOWER_DEFS = {
+  pulse:  { type:'pulse',  name:'Pulse',    cost:80,  damage:15, range:120, fireRate:1.5, color:'#00f0ff', glow:'#00f0ff88', desc:'Basic single-target. Reliable & cheap.', unlock:1 },
+  frost:  { type:'frost',  name:'Frost',    cost:100, damage:8,  range:110, fireRate:1.8, color:'#88ddff', glow:'#88ddff88', desc:'Slows one enemy heavily. Great support.', unlock:1, slow:0.55, slowDur:3000 },
+  laser:  { type:'laser',  name:'Laser',    cost:140, damage:60, range:160, fireRate:1.0, color:'#ff0055', glow:'#ff005588', desc:'High damage sniper. Melts tanks & bosses.', unlock:2 },
+  emp:    { type:'emp',    name:'EMP',      cost:110, damage:20, range:120, fireRate:1.2, color:'#aa00ff', glow:'#aa00ff88', desc:'Slows + AOE damage. Zone control.', unlock:2, aoe:80, slow:0.35, slowDur:2500 },
+  missile:{ type:'missile',name:'Missile',  cost:220, damage:80, range:180, fireRate:0.7, color:'#ff8800', glow:'#ff880088', desc:'Long range massive damage. Slow fire.', unlock:3, aoe:60 },
+  plasma: { type:'plasma', name:'Plasma',   cost:200, damage:45, range:145, fireRate:1.3, color:'#00ff88', glow:'#00ff8888', desc:'Devastating AOE splash. Wipes groups.', unlock:3, aoe:90 },
+  tesla:  { type:'tesla',  name:'Tesla',    cost:260, damage:30, range:130, fireRate:1.1, color:'#ffff00', glow:'#ffff0088', desc:'Chain lightning hits 3 enemies. Shocking!', unlock:4, chain:3, chainRange:100 },
+  void:   { type:'void',   name:'Void',     cost:350, damage:100,range:150, fireRate:0.6, color:'#cc00ff', glow:'#cc00ff88', desc:'Teleports enemies backwards. Reality warp.', unlock:5, teleport:3 },
+};
+const TOWER_ORDER = ['pulse','frost','laser','emp','missile','plasma','tesla','void'];
+
+const ENEMY_DEFS = {
+  drone:   { type:'drone',   hp:40,  speed:80,  reward:10, color:'#ff4444', glow:'#ff444488', size:8 },
+  speeder: { type:'speeder', hp:25,  speed:130, reward:15, color:'#ffaa00', glow:'#ffaa0088', size:7 },
+  mech:    { type:'mech',    hp:120, speed:50,  reward:20, color:'#ff6600', glow:'#ff660088', size:12 },
+  phantom: { type:'phantom', hp:60,  speed:100, reward:25, color:'#88ffcc', glow:'#88ffcc88', size:9 },
+  tank:    { type:'tank',    hp:300, speed:30,  reward:35, color:'#cc00cc', glow:'#cc00cc88', size:16 },
+  boss:    { type:'boss',    hp:800, speed:25,  reward:100,color:'#ff0066', glow:'#ff006688', size:20 },
+  mega:    { type:'mega',    hp:2000,speed:20,  reward:200,color:'#ff2200', glow:'#ff220088', size:24 },
+};
+
+const LEVEL_COLORS = ['#00f0ff','#ffaa00','#ff6600','#ff0055','#ff00ff','#ff0000','#ff4400','#8800ff'];
+
+const LEVELS = [
+  { id:1, name:'Neon Gateway', gold:300, lives:20, diff:'Easy', diffClass:'diff-easy',
+    path:[{x:-1,y:2},{x:4,y:2},{x:4,y:6},{x:10,y:6},{x:10,y:2},{x:15,y:2},{x:15,y:9},{x:20,y:9},{x:21,y:9}],
+    waves:[
+      { enemies:[{type:'drone',count:8,interval:800}], bonus:30 },
+      { enemies:[{type:'drone',count:12,interval:600}], bonus:40 },
+      { enemies:[{type:'drone',count:6,interval:700},{type:'speeder',count:4,interval:500}], bonus:50 },
+      { enemies:[{type:'speeder',count:8,interval:500},{type:'drone',count:6,interval:600}], bonus:60 },
+      { enemies:[{type:'mech',count:3,interval:1200},{type:'drone',count:10,interval:500}], bonus:80 },
+    ]
+  },
+  { id:2, name:'Circuit Maze', gold:450, lives:18, diff:'Medium', diffClass:'diff-med',
+    path:[{x:-1,y:6},{x:3,y:6},{x:3,y:1},{x:8,y:1},{x:8,y:10},{x:13,y:10},{x:13,y:3},{x:17,y:3},{x:17,y:8},{x:21,y:8}],
+    waves:[
+      { enemies:[{type:'drone',count:10,interval:500},{type:'speeder',count:5,interval:600}], bonus:40 },
+      { enemies:[{type:'mech',count:5,interval:1000},{type:'drone',count:8,interval:400}], bonus:50 },
+      { enemies:[{type:'speeder',count:10,interval:400},{type:'mech',count:4,interval:800}], bonus:60 },
+      { enemies:[{type:'tank',count:2,interval:1500},{type:'drone',count:12,interval:350}], bonus:80 },
+      { enemies:[{type:'tank',count:3,interval:1200},{type:'mech',count:6,interval:700},{type:'speeder',count:8,interval:400}], bonus:100 },
+      { enemies:[{type:'boss',count:1,interval:0},{type:'mech',count:4,interval:800}], bonus:120 },
+    ]
+  },
+  { id:3, name:'Data Fortress', gold:550, lives:15, diff:'Hard', diffClass:'diff-hard',
+    path:[{x:-1,y:0},{x:2,y:0},{x:2,y:5},{x:6,y:5},{x:6,y:11},{x:10,y:11},{x:10,y:2},{x:14,y:2},{x:14,y:8},{x:18,y:8},{x:18,y:4},{x:21,y:4}],
+    waves:[
+      { enemies:[{type:'drone',count:15,interval:350},{type:'speeder',count:8,interval:400}], bonus:40 },
+      { enemies:[{type:'mech',count:8,interval:700},{type:'tank',count:2,interval:1500}], bonus:50 },
+      { enemies:[{type:'speeder',count:12,interval:300},{type:'tank',count:3,interval:1200},{type:'drone',count:10,interval:400}], bonus:65 },
+      { enemies:[{type:'tank',count:5,interval:1000},{type:'mech',count:8,interval:600}], bonus:80 },
+      { enemies:[{type:'boss',count:1,interval:0},{type:'tank',count:3,interval:1000},{type:'speeder',count:10,interval:300}], bonus:100 },
+      { enemies:[{type:'boss',count:2,interval:3000},{type:'mech',count:10,interval:500},{type:'tank',count:4,interval:800}], bonus:120 },
+      { enemies:[{type:'boss',count:3,interval:2500},{type:'tank',count:6,interval:700},{type:'speeder',count:15,interval:250}], bonus:160 },
+    ]
+  },
+  { id:4, name:'Neon Core', gold:500, lives:12, diff:'Extreme', diffClass:'diff-extreme',
+    path:[{x:-1,y:4},{x:3,y:4},{x:3,y:10},{x:7,y:10},{x:7,y:1},{x:11,y:1},{x:11,y:8},{x:15,y:8},{x:15,y:3},{x:19,y:3},{x:19,y:11},{x:21,y:11}],
+    waves:[
+      { enemies:[{type:'mech',count:8,interval:600},{type:'speeder',count:10,interval:350}], bonus:50 },
+      { enemies:[{type:'tank',count:4,interval:1000},{type:'drone',count:15,interval:300}], bonus:65 },
+      { enemies:[{type:'speeder',count:15,interval:250},{type:'mech',count:8,interval:500}], bonus:80 },
+      { enemies:[{type:'boss',count:1,interval:0},{type:'tank',count:4,interval:900},{type:'mech',count:6,interval:600}], bonus:100 },
+      { enemies:[{type:'phantom',count:8,interval:400},{type:'tank',count:4,interval:800}], bonus:110 },
+      { enemies:[{type:'boss',count:2,interval:2500},{type:'mech',count:10,interval:450},{type:'tank',count:4,interval:700}], bonus:130 },
+      { enemies:[{type:'boss',count:2,interval:2000},{type:'tank',count:6,interval:600},{type:'speeder',count:15,interval:200}], bonus:150 },
+      { enemies:[{type:'boss',count:3,interval:2000},{type:'boss',count:2,interval:3000},{type:'tank',count:8,interval:500}], bonus:180 },
+    ]
+  },
+  { id:5, name:'System Overload', gold:600, lives:10, diff:'Insane', diffClass:'diff-insane',
+    path:[{x:-1,y:6},{x:2,y:6},{x:2,y:1},{x:6,y:1},{x:6,y:11},{x:9,y:11},{x:9,y:4},{x:12,y:4},{x:12,y:9},{x:16,y:9},{x:16,y:2},{x:19,y:2},{x:19,y:7},{x:21,y:7}],
+    waves:[
+      { enemies:[{type:'tank',count:5,interval:800},{type:'mech',count:10,interval:400}], bonus:60 },
+      { enemies:[{type:'speeder',count:20,interval:200},{type:'tank',count:4,interval:900}], bonus:70 },
+      { enemies:[{type:'boss',count:2,interval:2500},{type:'mech',count:12,interval:400}], bonus:90 },
+      { enemies:[{type:'phantom',count:12,interval:300},{type:'tank',count:6,interval:600}], bonus:110 },
+      { enemies:[{type:'boss',count:3,interval:2000},{type:'tank',count:6,interval:700}], bonus:130 },
+      { enemies:[{type:'mech',count:20,interval:300},{type:'tank',count:8,interval:500},{type:'speeder',count:20,interval:150}], bonus:150 },
+      { enemies:[{type:'boss',count:3,interval:1800},{type:'boss',count:2,interval:2500},{type:'tank',count:5,interval:600}], bonus:170 },
+      { enemies:[{type:'boss',count:4,interval:1500},{type:'tank',count:10,interval:400},{type:'mech',count:15,interval:300}], bonus:200 },
+      { enemies:[{type:'boss',count:5,interval:1200},{type:'boss',count:3,interval:1800},{type:'tank',count:8,interval:500},{type:'speeder',count:25,interval:120}], bonus:250 },
+    ]
+  },
+  { id:6, name:'Ghost Protocol', gold:650, lives:10, diff:'Nightmare', diffClass:'diff-nightmare',
+    path:[{x:-1,y:3},{x:2,y:3},{x:2,y:10},{x:5,y:10},{x:5,y:1},{x:9,y:1},{x:9,y:8},{x:12,y:8},{x:12,y:2},{x:16,y:2},{x:16,y:11},{x:19,y:11},{x:19,y:5},{x:21,y:5}],
+    waves:[
+      { enemies:[{type:'phantom',count:10,interval:400},{type:'speeder',count:12,interval:250}], bonus:60 },
+      { enemies:[{type:'tank',count:6,interval:700},{type:'phantom',count:8,interval:350}], bonus:80 },
+      { enemies:[{type:'boss',count:2,interval:2200},{type:'mech',count:15,interval:350}], bonus:100 },
+      { enemies:[{type:'phantom',count:15,interval:250},{type:'tank',count:6,interval:600},{type:'speeder',count:15,interval:180}], bonus:120 },
+      { enemies:[{type:'boss',count:3,interval:1800},{type:'phantom',count:10,interval:300}], bonus:140 },
+      { enemies:[{type:'tank',count:10,interval:450},{type:'mech',count:15,interval:350},{type:'phantom',count:10,interval:250}], bonus:160 },
+      { enemies:[{type:'boss',count:4,interval:1500},{type:'tank',count:8,interval:500}], bonus:180 },
+      { enemies:[{type:'mega',count:1,interval:0},{type:'boss',count:3,interval:2000},{type:'phantom',count:15,interval:200}], bonus:220 },
+      { enemies:[{type:'mega',count:2,interval:3000},{type:'boss',count:4,interval:1500},{type:'tank',count:10,interval:400}], bonus:260 },
+    ]
+  },
+  { id:7, name:'Flux Rift', gold:700, lives:8, diff:'Hell', diffClass:'diff-hell',
+    path:[{x:-1,y:8},{x:3,y:8},{x:3,y:1},{x:7,y:1},{x:7,y:11},{x:11,y:11},{x:11,y:4},{x:14,y:4},{x:14,y:9},{x:18,y:9},{x:18,y:0},{x:21,y:0}],
+    waves:[
+      { enemies:[{type:'tank',count:8,interval:500},{type:'phantom',count:12,interval:300}], bonus:70 },
+      { enemies:[{type:'boss',count:3,interval:1800},{type:'mech',count:15,interval:300}], bonus:90 },
+      { enemies:[{type:'speeder',count:25,interval:120},{type:'tank',count:8,interval:500}], bonus:110 },
+      { enemies:[{type:'phantom',count:20,interval:200},{type:'boss',count:3,interval:1500}], bonus:130 },
+      { enemies:[{type:'mega',count:1,interval:0},{type:'tank',count:10,interval:400},{type:'mech',count:15,interval:300}], bonus:150 },
+      { enemies:[{type:'boss',count:5,interval:1200},{type:'phantom',count:15,interval:200}], bonus:170 },
+      { enemies:[{type:'mega',count:2,interval:2500},{type:'boss',count:4,interval:1200},{type:'speeder',count:30,interval:100}], bonus:200 },
+      { enemies:[{type:'mega',count:2,interval:2000},{type:'mega',count:1,interval:3000},{type:'boss',count:5,interval:1000},{type:'tank',count:12,interval:350}], bonus:240 },
+      { enemies:[{type:'mega',count:3,interval:1800},{type:'boss',count:6,interval:800},{type:'phantom',count:20,interval:150},{type:'tank',count:10,interval:300}], bonus:300 },
+    ]
+  },
+  { id:8, name:'Void Terminal', gold:800, lives:5, diff:'VOID', diffClass:'diff-void',
+    path:[{x:-1,y:5},{x:1,y:5},{x:1,y:0},{x:4,y:0},{x:4,y:11},{x:7,y:11},{x:7,y:3},{x:10,y:3},{x:10,y:9},{x:13,y:9},{x:13,y:1},{x:16,y:1},{x:16,y:10},{x:19,y:10},{x:19,y:6},{x:21,y:6}],
+    waves:[
+      { enemies:[{type:'boss',count:4,interval:1200},{type:'tank',count:10,interval:400}], bonus:80 },
+      { enemies:[{type:'mega',count:2,interval:2000},{type:'phantom',count:20,interval:180}], bonus:100 },
+      { enemies:[{type:'speeder',count:30,interval:100},{type:'boss',count:5,interval:1000}], bonus:120 },
+      { enemies:[{type:'mega',count:2,interval:1500},{type:'boss',count:4,interval:1000},{type:'mech',count:20,interval:200}], bonus:140 },
+      { enemies:[{type:'phantom',count:25,interval:150},{type:'mega',count:2,interval:2000},{type:'tank',count:12,interval:300}], bonus:160 },
+      { enemies:[{type:'mega',count:3,interval:1500},{type:'boss',count:5,interval:800},{type:'speeder',count:25,interval:100}], bonus:180 },
+      { enemies:[{type:'mega',count:3,interval:1200},{type:'mega',count:2,interval:2000},{type:'phantom',count:20,interval:150}], bonus:200 },
+      { enemies:[{type:'mega',count:4,interval:1000},{type:'boss',count:6,interval:700},{type:'tank',count:15,interval:250}], bonus:250 },
+      { enemies:[{type:'mega',count:5,interval:800},{type:'mega',count:3,interval:1200},{type:'boss',count:5,interval:600},{type:'speeder',count:30,interval:80}], bonus:300 },
+      { enemies:[{type:'mega',count:6,interval:600},{type:'mega',count:4,interval:1000},{type:'boss',count:8,interval:500},{type:'phantom',count:25,interval:100}], bonus:400 },
+    ]
+  },
+];
+
+const HP_SCALE = 1.2;
+const PROJ_SPEED = 350;
+
+// ===== STATE =====
+let uid = 1;
+const G = {
+  state: 'menu', level: 0, wave: 0, gold: 300, lives: 20,
+  towers: [], enemies: [], projectiles: [], particles: [],
+  selectedTower: null, hoveredCell: null,
+  spawnQueue: [], waveActive: false, pathCells: new Set(),
+  cs: { w:40, h:40 }, ox: 0, oy: 0, lastTime: 0,
+};
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const placingBar = document.getElementById('placing-bar');
+const hudEl = document.getElementById('hud');
+const towerPanel = document.getElementById('tower-panel');
+const waveFloat = document.getElementById('wave-float');
+
+// ===== HELPERS =====
+function dist(a,b) { return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2); }
+function g2p(col,row) { return { x: G.ox+col*G.cs.w+G.cs.w/2, y: G.oy+row*G.cs.h+G.cs.h/2 }; }
+function p2g(px,py) {
+  const c=Math.floor((px-G.ox)/G.cs.w), r=Math.floor((py-G.oy)/G.cs.h);
+  return (c<0||c>=GRID_COLS||r<0||r>=GRID_ROWS) ? null : {row:r,col:c};
+}
+function calcPathCells(path) {
+  const s = new Set();
+  for (let i=0;i<path.length-1;i++) {
+    const a=path[i], b=path[i+1];
+    const steps=Math.max(Math.abs(b.x-a.x),Math.abs(b.y-a.y))+1;
+    for (let j=0;j<=steps;j++) {
+      const t=steps===0?0:j/steps;
+      const cx=Math.round(a.x+(b.x-a.x)*t), cy=Math.round(a.y+(b.y-a.y)*t);
+      if (cx>=0&&cx<GRID_COLS&&cy>=0&&cy<GRID_ROWS) s.add(cy+','+cx);
+    }
+  }
+  return s;
+}
+function addParticles(x,y,color,n) {
+  for (let i=0;i<n;i++) {
+    const a=Math.random()*Math.PI*2, sp=30+Math.random()*80;
+    G.particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:0.4+Math.random()*0.4,ml:0.4+Math.random()*0.4,color,size:2+Math.random()*3});
+  }
+}
+
+// ===== GAME ACTIONS =====
+function startLevel(idx) {
+  const lv=LEVELS[idx];
+  G.level=idx; G.wave=0; G.gold=lv.gold; G.lives=lv.lives;
+  G.towers=[]; G.enemies=[]; G.projectiles=[]; G.particles=[];
+  G.spawnQueue=[]; G.waveActive=false; G.selectedTower=null;
+  G.hoveredCell=null;
+  G.pathCells=calcPathCells(lv.path); G.state='playing';
+  overlay.classList.add('hidden');
+  hudEl.classList.add('active');
+  towerPanel.classList.add('active');
+  canvas.style.cursor='default';
+  updateUI(); buildTowerPanel(); updateWaveFloat();
+}
+
+function startWave() {
+  const lv=LEVELS[G.level];
+  if (G.wave>=lv.waves.length) return;
+  const wd=lv.waves[G.wave], now=performance.now(), q=[];
+  let t=now+500;
+  for (const g of wd.enemies) { for (let i=0;i<g.count;i++) { q.push({type:g,spawnAt:t}); t+=g.interval; } }
+  G.spawnQueue=q; G.waveActive=true; updateUI(); updateWaveFloat();
+}
+
+function selectTower(type) {
+  G.selectedTower = G.selectedTower===type ? null : type;
+  canvas.style.cursor = G.selectedTower ? 'crosshair' : 'default';
+  updateUI(); updatePlacingBar();
+  document.querySelectorAll('.tower-btn').forEach(b => b.classList.toggle('selected', b.dataset.type===G.selectedTower));
+}
+
+function placeTower(px,py) {
+  if (G.state!=='playing'||!G.selectedTower) return;
+  const cell=p2g(px,py); if (!cell) return;
+  const def=TOWER_DEFS[G.selectedTower];
+  if (G.gold<def.cost||G.pathCells.has(cell.row+','+cell.col)||G.towers.some(t=>t.row===cell.row&&t.col===cell.col)||def.unlock>G.level+1) return;
+  const p=g2p(cell.col,cell.row);
+  G.towers.push({id:uid++,type:def.type,row:cell.row,col:cell.col,x:p.x,y:p.y,level:1,lastFire:0,targetId:null,angle:0});
+  G.gold-=def.cost; addParticles(p.x,p.y,def.color,6); updateUI();
+}
+
+function showOverlay(html) { overlay.innerHTML=html; overlay.classList.remove('hidden'); }
+
+// ===== UI =====
+function updateUI() {
+  const lv=LEVELS[G.level];
+  document.getElementById('hud-level').textContent='LV.'+(G.level+1)+' '+lv.name;
+  document.getElementById('hud-gold').textContent='\uD83D\uDCB0 '+G.gold;
+  document.getElementById('hud-lives').textContent='\u2764\uFE0F '+G.lives;
+  document.getElementById('hud-wave').textContent='Wave '+(G.wave+1)+'/'+lv.waves.length;
+}
+
+function updatePlacingBar() {
+  if (G.state==='playing'&&G.selectedTower) {
+    const def=TOWER_DEFS[G.selectedTower];
+    placingBar.classList.add('active');
+    document.getElementById('placing-name').textContent=def.name;
+    document.getElementById('placing-name').style.color=def.color;
+    document.getElementById('placing-cost').textContent='\uD83D\uDCB0'+def.cost;
+  } else {
+    placingBar.classList.remove('active');
+  }
+}
+
+function updateWaveFloat() {
+  if (G.state!=='playing') { waveFloat.classList.remove('active'); return; }
+  waveFloat.classList.add('active');
+  const btn=document.getElementById('wave-float-btn');
+  const statusEl = document.getElementById('wave-float-status');
+  if (statusEl) statusEl.remove();
+  if (!G.waveActive) {
+    btn.style.display='block';
+    btn.textContent='SEND WAVE '+(G.wave+1);
+  } else {
+    btn.style.display='none';
+    const s=document.createElement('div'); s.id='wave-float-status';
+    s.textContent='\u26A1 WAVE IN PROGRESS';
+    waveFloat.appendChild(s);
+  }
+}
+
+function buildTowerPanel() {
+  const row=document.getElementById('tower-row');
+  row.innerHTML='';
+  for (const key of TOWER_ORDER) {
+    const def=TOWER_DEFS[key];
+    const unlocked=def.unlock<=G.level+1;
+    const btn=document.createElement('button');
+    btn.className='tower-btn'+(unlocked?'':' locked');
+    btn.dataset.type=def.type;
+    btn.style.setProperty('--tc',def.color);
+    if (G.selectedTower===def.type) btn.classList.add('selected');
+    btn.innerHTML=`<div class="dot" style="background:${unlocked?def.color:'#333'};box-shadow:${unlocked?'0 0 8px '+def.color:'none'}"></div>
+      <span class="name" style="color:${unlocked?def.color:'#555'}">${def.name}</span>
+      <span class="cost">${unlocked?'\uD83D\uDCB0'+def.cost:'\uD83D\uDD12LV'+def.unlock}</span>
+      <span class="desc">${def.desc}</span>`;
+    if (unlocked) btn.onclick=()=>selectTower(def.type);
+    row.appendChild(btn);
+  }
+}
+
+function toggleHelp() { document.getElementById('help-overlay').classList.toggle('active'); }
+
+// ===== LEVEL SELECTOR =====
+function buildLevelGrid() {
+  const grid=document.getElementById('level-grid');
+  if (!grid) return;
+  grid.innerHTML='';
+  for (let i=0;i<LEVELS.length;i++) {
+    const lv=LEVELS[i];
+    const card=document.createElement('div');
+    card.className='level-card';
+    card.onclick=()=>startLevel(i);
+    card.innerHTML=`<div class="lv-num">Level ${lv.id}</div>
+      <div class="lv-name" style="color:${LEVEL_COLORS[i]||'#ccc'}">${lv.name}</div>
+      <div class="lv-diff ${lv.diffClass}">${lv.diff}</div>
+      <div class="lv-info">${lv.waves.length} waves | ${lv.lives} lives</div>`;
+    grid.appendChild(card);
+  }
+}
+
+// ===== CANVAS EVENTS =====
+canvas.addEventListener('click', e => {
+  const r=canvas.getBoundingClientRect();
+  placeTower(e.clientX-r.left, e.clientY-r.top);
+});
+canvas.addEventListener('mousemove', e => {
+  const r=canvas.getBoundingClientRect();
+  G.hoveredCell=p2g(e.clientX-r.left, e.clientY-r.top);
+});
+canvas.addEventListener('mouseleave', () => { G.hoveredCell=null; });
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const r=canvas.getBoundingClientRect(), t=e.touches[0];
+  G.hoveredCell=p2g(t.clientX-r.left, t.clientY-r.top);
+  placeTower(t.clientX-r.left, t.clientY-r.top);
+}, {passive:false});
+
+// ===== KEYBOARD =====
+const KEY_MAP = {'1':'pulse','2':'frost','3':'laser','4':'emp','5':'missile','6':'plasma','7':'tesla','8':'void'};
+window.addEventListener('keydown', e => {
+  if (G.state!=='playing') {
+    if (e.key==='Enter'||e.key===' ') {
+      e.preventDefault();
+      if (G.state==='levelComplete') startLevel(G.level+1);
+      else if (G.state==='gameOver'||G.state==='victory') { G.state='menu'; showMenu(); }
+      else if (G.state==='paused') { G.state='playing'; overlay.classList.add('hidden'); }
+    }
+    return;
+  }
+  if (KEY_MAP[e.key]) { selectTower(KEY_MAP[e.key]); return; }
+  switch(e.key) {
+    case 'Escape': selectTower(null); break;
+    case 'p': case 'P':
+      if (G.state==='playing') { G.state='paused'; showPaused(); }
+      break;
+    case ' ':
+      e.preventDefault();
+      if (!G.waveActive) startWave();
+      break;
+    case 'h': case 'H': toggleHelp(); break;
+  }
+});
+
+function showMenu() {
+  hudEl.classList.remove('active');
+  towerPanel.classList.remove('active');
+  waveFloat.classList.remove('active');
+  placingBar.classList.remove('active');
+  showOverlay(`<div>
+    <h1 style="color:#00f0ff">NEON DEFENSE</h1>
+    <p class="subtitle">Cyberpunk Tower Defense</p>
+    <div class="level-grid" id="level-grid"></div>
+  </div>`);
+  buildLevelGrid();
+}
+function showPaused() {
+  showOverlay(`<div><h2 style="color:#ffaa00;text-shadow:0 0 20px #ffaa0088">PAUSED</h2><p style="margin-bottom:16px">Level ${G.level+1}: ${LEVELS[G.level].name}</p><button class="btn btn-yellow" onclick="G.state='playing';overlay.classList.add('hidden')">RESUME</button><br><button class="btn btn-sm" style="background:#1a1a3a;color:#ff6666;margin-top:10px" onclick="G.state='menu';showMenu()">QUIT TO MENU</button></div>`);
+}
+function showGameOver() {
+  showOverlay(`<div><h2 style="color:#ff0044;text-shadow:0 0 20px #ff004488">SYSTEM BREACH</h2><p>Defenders overwhelmed at Level ${G.level+1}</p><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn btn-yellow" onclick="startLevel(${G.level})">RETRY LEVEL</button><button class="btn btn-red" onclick="G.state='menu';showMenu()">MENU</button></div></div>`);
+}
+function showLevelComplete() {
+  const nextExists = G.level+1 < LEVELS.length;
+  let btns = '';
+  if (nextExists) btns += `<button class="btn btn-green" onclick="startLevel(${G.level+1})">NEXT LEVEL &#x2192;</button>`;
+  btns += `<button class="btn btn-cyan" onclick="G.state='menu';showMenu()">MENU</button>`;
+  showOverlay(`<div><h2 style="color:#00ff88;text-shadow:0 0 20px #00ff8888">SECTOR CLEARED</h2><p>Level ${G.level+1} complete!</p><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">${btns}</div></div>`);
+}
+function showVictory() {
+  showOverlay(`<div><h2 style="color:#00f0ff;text-shadow:0 0 30px #00f0ff88">NEON VICTORY</h2><p style="color:#00ff88;font-size:1.1rem">All sectors defended! You are the grid guardian.</p><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn btn-cyan" onclick="G.state='menu';showMenu()">MENU</button></div></div>`);
+}
+
+// ===== RESIZE =====
+function resize() {
+  const wrap=document.getElementById('canvas-wrap'), rect=wrap.getBoundingClientRect();
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=rect.width*dpr; canvas.height=rect.height*dpr;
+  canvas.style.width=rect.width+'px'; canvas.style.height=rect.height+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const mw=rect.width/GRID_COLS, mh=rect.height/GRID_ROWS;
+  const cw=Math.floor(Math.min(mw,mh));
+  G.cs={w:cw,h:cw}; G.ox=(rect.width-cw*GRID_COLS)/2; G.oy=(rect.height-cw*GRID_ROWS)/2;
+}
+window.addEventListener('resize',resize);
+if (window.visualViewport) { window.visualViewport.addEventListener('resize', resize); window.visualViewport.addEventListener('scroll', resize); }
+
+// ===== UPDATE =====
+function update(dt, now) {
+  if (G.state!=='playing') return;
+  const lv=LEVELS[G.level], path=lv.path, cs=G.cs;
+
+  // Spawn
+  const rq=[];
+  for (const item of G.spawnQueue) { if (now>=item.spawnAt) spawnEnemy(item.type); else rq.push(item); }
+  G.spawnQueue=rq;
+
+  // Enemies
+  for (const e of G.enemies) {
+    if (e.dead||e.reachedEnd) continue;
+    if (e.slowTimer>0) { e.slowTimer-=dt*1000; if (e.slowTimer<=0) e.slowFactor=1; }
+    const spd=e.baseSpeed*e.slowFactor;
+    const pA=g2p(path[e.pi].x,path[e.pi].y), pB=g2p(path[e.pi+1].x,path[e.pi+1].y);
+    const sl=dist(pA,pB);
+    if (sl===0) { e.pi++; e.pp=0; continue; }
+    e.pp+=spd/sl*dt;
+    while (e.pp>=1&&e.pi<path.length-1) { e.pp-=1; e.pi++; }
+    if (e.pi>=path.length-1) { e.reachedEnd=true; G.lives=Math.max(0,G.lives-1); addParticles(e.x,e.y,'#ff0000',8); if (G.lives<=0) { G.state='gameOver'; showGameOver(); return; } continue; }
+    const a=g2p(path[e.pi].x,path[e.pi].y), b=g2p(path[Math.min(e.pi+1,path.length-1)].x,path[Math.min(e.pi+1,path.length-1)].y);
+    e.x=a.x+(b.x-a.x)*e.pp; e.y=a.y+(b.y-a.y)*e.pp;
+  }
+  G.enemies=G.enemies.filter(e=>!e.dead&&!e.reachedEnd);
+
+  // Towers
+  for (const t of G.towers) {
+    const def=TOWER_DEFS[t.type], dm=1+(t.level-1)*0.4, rm=1+(t.level-1)*0.15;
+    const er=def.range*(cs.w/40)*rm, fi=1000/def.fireRate;
+    let best=null, bd=Infinity;
+    for (const e of G.enemies) { if (e.dead||e.reachedEnd) continue; const d=dist({x:t.x,y:t.y},{x:e.x,y:e.y}); if (d<=er&&d<bd) { bd=d; best=e; } }
+    if (best) {
+      t.angle=Math.atan2(best.y-t.y,best.x-t.x); t.targetId=best.id;
+      if (now-t.lastFire>=fi) {
+        t.lastFire=now;
+        const aoe=def.aoe?def.aoe*(cs.w/40):0;
+        G.projectiles.push({id:uid++,x:t.x,y:t.y,tid:best.id,dmg:Math.round(def.damage*dm),speed:PROJ_SPEED,color:def.color,glow:def.glow,size:4,aoe,slow:def.slow||0,slowDur:def.slowDur||0,tt:t.type,trail:[],chain:def.chain||0,chainRange:def.chainRange||0,teleport:def.teleport||0});
+      }
+    } else t.targetId=null;
+  }
+
+  // Projectiles
+  const dp=[];
+  for (const p of G.projectiles) {
+    const tgt=G.enemies.find(e=>e.id===p.tid&&!e.dead&&!e.reachedEnd);
+    if (!tgt) { dp.push(p.id); continue; }
+    p.trail.push({x:p.x,y:p.y}); if (p.trail.length>5) p.trail.shift();
+    const dx=tgt.x-p.x,dy=tgt.y-p.y,d=Math.sqrt(dx*dx+dy*dy),mv=p.speed*dt;
+    if (d<=mv+tgt.size) {
+      // Hit!
+      tgt.hp-=p.dmg; addParticles(tgt.x,tgt.y,p.color,5);
+
+      // AOE
+      if (p.aoe>0) for (const e of G.enemies) { if (e.id===tgt.id||e.dead||e.reachedEnd) continue; if (dist({x:tgt.x,y:tgt.y},{x:e.x,y:e.y})<=p.aoe) { e.hp-=Math.round(p.dmg*0.5); if (p.slow>0) { e.slowFactor=p.slow; e.slowTimer=p.slowDur; } } }
+
+      // Slow (single target - frost)
+      if (p.slow>0) { tgt.slowFactor=p.slow; tgt.slowTimer=p.slowDur; }
+
+      // Tesla chain lightning
+      if (p.chain>0) {
+        let chainSrc=tgt, chainLeft=p.chain, hit=new Set([tgt.id]);
+        while (chainLeft>0) {
+          let cBest=null, cBd=p.chainRange*(cs.w/40);
+          for (const e of G.enemies) { if (e.dead||e.reachedEnd||hit.has(e.id)) continue; const cd=dist({x:chainSrc.x,y:chainSrc.y},{x:e.x,y:e.y}); if (cd<=cBd&&cd>0) { cBd=cd; cBest=e; } }
+          if (!cBest) break;
+          cBest.hp-=Math.round(p.dmg*0.5); hit.add(cBest.id);
+          addParticles(cBest.x,cBest.y,'#ffff00',4);
+          // Draw chain effect via particles
+          G.particles.push({x:chainSrc.x,y:chainSrc.y,vx:(cBest.x-chainSrc.x)*3,vy:(cBest.y-chainSrc.y)*3,life:0.15,ml:0.15,color:'#ffff00',size:3});
+          if (cBest.hp<=0) { cBest.dead=true; G.gold+=cBest.reward; addParticles(cBest.x,cBest.y,cBest.color,12); }
+          chainSrc=cBest; chainLeft--;
+        }
+      }
+
+      // Void teleport
+      if (p.teleport>0) {
+        const tpSteps=p.teleport;
+        if (tgt.pi>tpSteps) {
+          tgt.pi-=tpSteps; tgt.pp=0;
+          addParticles(tgt.x,tgt.y,'#cc00ff',10);
+          const tpA=g2p(path[tgt.pi].x,path[tgt.pi].y);
+          tgt.x=tpA.x; tgt.y=tpA.y;
+          addParticles(tgt.x,tgt.y,'#cc00ff',10);
+        }
+      }
+
+      if (tgt.hp<=0) { tgt.dead=true; G.gold+=tgt.reward; addParticles(tgt.x,tgt.y,tgt.color,12); }
+      dp.push(p.id);
+    } else { p.x+=dx/d*mv; p.y+=dy/d*mv; }
+  }
+  G.projectiles=G.projectiles.filter(p=>!dp.includes(p.id));
+
+  // Particles
+  for (const p of G.particles) { p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=0.95; p.vy*=0.95; p.life-=dt; }
+  G.particles=G.particles.filter(p=>p.life>0);
+
+  // Wave complete
+  if (G.waveActive&&G.spawnQueue.length===0&&G.enemies.length===0) {
+    G.gold+=lv.waves[G.wave].bonus; G.wave++; G.waveActive=false;
+    if (G.wave>=lv.waves.length) { G.state=G.level>=LEVELS.length-1?'victory':'levelComplete'; if (G.state==='victory') showVictory(); else showLevelComplete(); }
+    updateUI(); updateWaveFloat();
+  }
+  updateUI();
+}
+
+function spawnEnemy(group) {
+  const def=ENEMY_DEFS[group.type], scale=Math.pow(HP_SCALE,G.level);
+  const p=g2p(LEVELS[G.level].path[0].x,LEVELS[G.level].path[0].y);
+  G.enemies.push({id:uid++,type:def.type,hp:Math.round(def.hp*scale),maxHp:Math.round(def.hp*scale),speed:def.speed,baseSpeed:def.speed,reward:def.reward,color:def.color,glow:def.glow,size:def.size,x:p.x,y:p.y,pi:0,pp:0,slowTimer:0,slowFactor:1,dead:false,reachedEnd:false});
+}
+
+// ===== RENDER =====
+function render(now) {
+  const w = canvas.width / (window.devicePixelRatio||1);
+  const h = canvas.height / (window.devicePixelRatio||1);
+  ctx.fillStyle='#0a0a1a'; ctx.fillRect(0,0,w,h);
+
+  if (G.state==='menu') return;
+
+  const cs=G.cs, path=LEVELS[G.level].path;
+
+  // Grid cells - alternating background for visibility
+  for (let r=0;r<GRID_ROWS;r++) {
+    for (let c=0;c<GRID_COLS;c++) {
+      const isPath = G.pathCells.has(r+','+c);
+      const x=G.ox+c*cs.w, y=G.oy+r*cs.h;
+      if (isPath) {
+        ctx.fillStyle='#0d0d25';
+      } else {
+        ctx.fillStyle = (r+c)%2===0 ? '#0e0e20' : '#0c0c1c';
+      }
+      ctx.fillRect(x,y,cs.w,cs.h);
+    }
+  }
+
+  // Grid lines
+  ctx.strokeStyle='#1c1c3c'; ctx.lineWidth=0.5;
+  for (let c=0;c<=GRID_COLS;c++) { const x=G.ox+c*cs.w; ctx.beginPath(); ctx.moveTo(x,G.oy); ctx.lineTo(x,G.oy+GRID_ROWS*cs.h); ctx.stroke(); }
+  for (let r=0;r<=GRID_ROWS;r++) { const y=G.oy+r*cs.h; ctx.beginPath(); ctx.moveTo(G.ox,y); ctx.lineTo(G.ox+GRID_COLS*cs.w,y); ctx.stroke(); }
+
+  // Path
+  ctx.lineWidth=cs.w*0.85; ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.strokeStyle='#141430'; ctx.beginPath();
+  for (let i=0;i<path.length;i++) { const p=g2p(path[i].x,path[i].y); i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y); }
+  ctx.stroke();
+  ctx.lineWidth=cs.w*0.9; ctx.strokeStyle='#222244'; ctx.globalAlpha=0.25; ctx.beginPath();
+  for (let i=0;i<path.length;i++) { const p=g2p(path[i].x,path[i].y); i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y); }
+  ctx.stroke(); ctx.globalAlpha=1;
+
+  // Arrows
+  const at=(now%3000)/3000; ctx.fillStyle='#333366';
+  for (let i=0;i<path.length-1;i++) {
+    const a=g2p(path[i].x,path[i].y),b=g2p(path[i+1].x,path[i+1].y),sd=dist(a,b);
+    const ac=Math.max(1,Math.floor(sd/(cs.w*1.5)));
+    for (let n=0;n<ac;n++) { const t=((n/ac)+at)%1, ax=a.x+(b.x-a.x)*t, ay=a.y+(b.y-a.y)*t, ang=Math.atan2(b.y-a.y,b.x-a.x);
+      ctx.save(); ctx.translate(ax,ay); ctx.rotate(ang); ctx.beginPath(); ctx.moveTo(6,0); ctx.lineTo(-4,-4); ctx.lineTo(-4,4); ctx.closePath(); ctx.fill(); ctx.restore(); }
+  }
+
+  // Hover cell highlight
+  const hv=G.hoveredCell;
+  if (hv&&G.state==='playing') {
+    const hx=G.ox+hv.col*cs.w, hy=G.oy+hv.row*cs.h;
+    const isPath=G.pathCells.has(hv.row+','+hv.col);
+    const occ=G.towers.some(t=>t.row===hv.row&&t.col===hv.col);
+    if (G.selectedTower) {
+      const def=TOWER_DEFS[G.selectedTower];
+      const can=!isPath&&!occ&&G.gold>=def.cost&&def.unlock<=G.level+1;
+      const er=def.range*(cs.w/40)*1.15, ctr=g2p(hv.col,hv.row);
+      ctx.beginPath(); ctx.arc(ctr.x,ctr.y,er,0,Math.PI*2);
+      ctx.fillStyle=can?'rgba(0,240,255,0.08)':'rgba(255,0,50,0.08)'; ctx.fill();
+      ctx.strokeStyle=can?'rgba(0,240,255,0.3)':'rgba(255,0,50,0.3)'; ctx.lineWidth=1; ctx.stroke();
+      ctx.fillStyle=can?'rgba(0,240,255,0.25)':'rgba(255,0,50,0.25)';
+    } else {
+      ctx.fillStyle=isPath?'rgba(255,100,0,0.12)':occ?'rgba(255,255,0,0.08)':'rgba(0,240,255,0.08)';
+    }
+    ctx.fillRect(hx,hy,cs.w,cs.h);
+    ctx.strokeStyle = G.selectedTower ? (isPath||occ ? '#ff004466' : '#00f0ff44') : '#ffffff22';
+    ctx.lineWidth=1.5; ctx.strokeRect(hx+0.5,hy+0.5,cs.w-1,cs.h-1);
+  }
+
+  // Towers
+  for (const t of G.towers) {
+    const def=TOWER_DEFS[t.type], sz=cs.w*0.35;
+    // Glow
+    ctx.beginPath(); ctx.arc(t.x,t.y,sz*1.5,0,Math.PI*2);
+    const gl=ctx.createRadialGradient(t.x,t.y,sz*0.5,t.x,t.y,sz*1.5);
+    gl.addColorStop(0,def.glow); gl.addColorStop(1,'transparent'); ctx.fillStyle=gl; ctx.fill();
+    // Body
+    ctx.fillStyle='#1a1a2e'; ctx.strokeStyle=def.color; ctx.lineWidth=2;
+    if (def.type==='frost') {
+      // Diamond shape
+      ctx.beginPath(); ctx.moveTo(t.x,t.y-sz); ctx.lineTo(t.x+sz,t.y); ctx.lineTo(t.x,t.y+sz); ctx.lineTo(t.x-sz,t.y); ctx.closePath(); ctx.fill(); ctx.stroke();
+    } else if (def.type==='tesla') {
+      // Triangle
+      ctx.beginPath(); ctx.moveTo(t.x,t.y-sz); ctx.lineTo(t.x+sz,t.y+sz*0.7); ctx.lineTo(t.x-sz,t.y+sz*0.7); ctx.closePath(); ctx.fill(); ctx.stroke();
+    } else if (def.type==='void') {
+      // Octagon
+      ctx.beginPath(); for (let i=0;i<8;i++){const a=Math.PI/4*i-Math.PI/8,bx=t.x+sz*Math.cos(a),by=t.y+sz*Math.sin(a);i===0?ctx.moveTo(bx,by):ctx.lineTo(bx,by);} ctx.closePath(); ctx.fill(); ctx.stroke();
+    } else if (def.type==='missile') {
+      // Square
+      ctx.fillRect(t.x-sz,t.y-sz,sz*2,sz*2); ctx.strokeRect(t.x-sz,t.y-sz,sz*2,sz*2);
+    } else {
+      // Circle (pulse, laser, emp, plasma)
+      ctx.beginPath(); ctx.arc(t.x,t.y,sz,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    }
+    // Level indicator
+    if (t.level>1) { ctx.fillStyle=def.color; ctx.font=`bold ${Math.round(sz*0.7)}px monospace`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(t.level,t.x,t.y); }
+    // Barrel/direction
+    ctx.save(); ctx.translate(t.x,t.y); ctx.rotate(t.angle);
+    if (def.type==='tesla') { ctx.fillStyle='#ffff00'; ctx.fillRect(-1,-1,sz*1.4,2); }
+    else if (def.type==='void') { ctx.fillStyle='#cc00ff'; ctx.fillRect(-2,-2,sz*1.2,4); }
+    else { ctx.fillStyle=def.color; ctx.fillRect(0,-2,sz*1.2,4); }
+    ctx.restore();
+    // Center dot
+    ctx.beginPath(); ctx.arc(t.x,t.y,sz*0.25,0,Math.PI*2); ctx.fillStyle=def.color; ctx.fill();
+  }
+
+  // Enemies
+  for (const e of G.enemies) {
+    if (e.dead||e.reachedEnd) continue;
+    ctx.beginPath(); ctx.arc(e.x,e.y,e.size*2,0,Math.PI*2);
+    const eg=ctx.createRadialGradient(e.x,e.y,e.size*0.5,e.x,e.y,e.size*2);
+    eg.addColorStop(0,e.glow); eg.addColorStop(1,'transparent'); ctx.fillStyle=eg; ctx.fill();
+    ctx.fillStyle=e.color;
+    if (e.type==='mega') { ctx.beginPath(); for (let i=0;i<8;i++){const a=Math.PI/4*i-Math.PI/8,bx=e.x+e.size*Math.cos(a),by=e.y+e.size*Math.sin(a);i===0?ctx.moveTo(bx,by):ctx.lineTo(bx,by);} ctx.closePath(); ctx.fill(); }
+    else if (e.type==='boss') { ctx.beginPath(); for (let i=0;i<6;i++){const a=Math.PI/3*i-Math.PI/2,bx=e.x+e.size*Math.cos(a),by=e.y+e.size*Math.sin(a);i===0?ctx.moveTo(bx,by):ctx.lineTo(bx,by);} ctx.closePath(); ctx.fill(); }
+    else if (e.type==='phantom') { ctx.globalAlpha=0.7; ctx.beginPath(); ctx.arc(e.x,e.y,e.size,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; }
+    else if (e.type==='tank') ctx.fillRect(e.x-e.size,e.y-e.size,e.size*2,e.size*2);
+    else if (e.type==='mech') { ctx.beginPath(); ctx.moveTo(e.x,e.y-e.size); ctx.lineTo(e.x+e.size,e.y); ctx.lineTo(e.x,e.y+e.size); ctx.lineTo(e.x-e.size,e.y); ctx.closePath(); ctx.fill(); }
+    else { ctx.beginPath(); ctx.arc(e.x,e.y,e.size,0,Math.PI*2); ctx.fill(); }
+    if (e.slowTimer>0) { ctx.strokeStyle='#aa00ff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(e.x,e.y,e.size+4,0,Math.PI*2); ctx.stroke(); }
+    const bw=e.size*2.5,bh=3,bx=e.x-bw/2,by=e.y-e.size-8,hp=e.hp/e.maxHp;
+    ctx.fillStyle='#333'; ctx.fillRect(bx,by,bw,bh);
+    ctx.fillStyle=hp>0.5?'#00ff88':hp>0.25?'#ffaa00':'#ff0044'; ctx.fillRect(bx,by,bw*hp,bh);
+  }
+
+  // Projectiles
+  for (const p of G.projectiles) {
+    for (let i=0;i<p.trail.length;i++) { const a=(i+1)/p.trail.length*0.4; ctx.beginPath(); ctx.arc(p.trail[i].x,p.trail[i].y,p.size*0.6,0,Math.PI*2); ctx.fillStyle=p.color+Math.round(a*255).toString(16).padStart(2,'0'); ctx.fill(); }
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fillStyle=p.color; ctx.shadowColor=p.color; ctx.shadowBlur=8; ctx.fill(); ctx.shadowBlur=0;
+  }
+
+  // Particles
+  for (const p of G.particles) { ctx.globalAlpha=p.life/p.ml; ctx.fillStyle=p.color; ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size); }
+  ctx.globalAlpha=1;
+}
+
+// ===== GAME LOOP =====
+function gameLoop(ts) {
+  const dt=Math.min((ts-G.lastTime)/1000,0.1); G.lastTime=ts;
+  update(dt,ts); render(ts);
+  requestAnimationFrame(gameLoop);
+}
+
+// ===== INIT =====
+resize(); G.lastTime=performance.now();
+requestAnimationFrame(gameLoop);
+showMenu();
+</script>
+</body>
+</html>
