@@ -42,24 +42,22 @@ const WIN=5;
 
 /* ── DIFFICULTY CONFIG ── */
 const DIFF={
-  easy:{
-    speed:3.9, reactFar:0.09, reactClose:0.16,
-    mistakeChance:0.005, goalAimChance:0, goalAimNoise:0.45,
-    depthLimit:0.25, bigMissChance:0.08, bigMissAngle:1.2, bigMissPower:0.6
-  },
-  medium:{
-    speed:4.3, reactFar:0.12, reactClose:0.19,
-    mistakeChance:0.002, goalAimChance:0.5, goalAimNoise:0.25,
-    depthLimit:0.15, bigMissChance:0.03, bigMissAngle:0.8, bigMissPower:0.7
-  },
-  hard:{
-    speed:4.8, reactFar:0.16, reactClose:0.22,
-    mistakeChance:0.0005, goalAimChance:0.8, goalAimNoise:0.12,
-    depthLimit:0.05, bigMissChance:0.01, bigMissAngle:0.5, bigMissPower:0.8
-  }
+  easy:{speed:3.9,reactFar:.09,reactClose:.16,mistakeChance:.005,goalAimChance:0,goalAimNoise:.45,depthLimit:.25,bigMissChance:.08,bigMissAngle:1.2,bigMissPower:.6},
+  medium:{speed:4.3,reactFar:.12,reactClose:.19,mistakeChance:.002,goalAimChance:.5,goalAimNoise:.25,depthLimit:.15,bigMissChance:.03,bigMissAngle:.8,bigMissPower:.7},
+  hard:{speed:4.8,reactFar:.16,reactClose:.22,mistakeChance:.0005,goalAimChance:.8,goalAimNoise:.12,depthLimit:.05,bigMissChance:.01,bigMissAngle:.5,bigMissPower:.8}
 };
-let diff='easy';
-let cfg=DIFF.easy;
+
+/* ── MAP CONFIG ── */
+const MAPS={
+  grass:{stripe1:'#2b8c4a',stripe2:'#278743',line:'rgba(255,255,255,0.5)',goalPost:'#bbb',bg:'rgba(25,50,35,0.3)'},
+  dirt:{stripe1:'#8B6914',stripe2:'#7A5B10',line:'rgba(255,255,255,0.3)',goalPost:'#9f9f6f',bg:'rgba(50,35,10,0.3)'},
+  neon:{stripe1:'#0a0a1a',stripe2:'#0f0f2a',line:'#0ff',goalPost:'#f0f',bg:'rgba(20,0,50,0.4)'}
+};
+
+/* ── GAME OPTIONS ── */
+let optDiff='easy',cfg=DIFF.easy;
+let optMap='grass',mapCfg=MAPS.grass;
+let optSkin='circle';
 
 /* ── audio ── */
 let ac=null;
@@ -97,34 +95,66 @@ resetPos();
 addEventListener('keydown',e=>{
   keys[e.key.toLowerCase()]=true;
   if(e.key===' '||e.key.startsWith('Arrow'))e.preventDefault();
-  if(e.key===' '&&st==='gameover'){st='menu';}
+  if(e.key===' '&&st==='gameover')st='menu';
 });
 addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
 
-/* ── mouse for menu ── */
-let mouseX=0,mouseY=0;
+/* ── mouse ── */
+let mx=0,my=0;
 cv.addEventListener('mousemove',e=>{
   let r=cv.getBoundingClientRect();
-  mouseX=(e.clientX-r.left)*(W/r.width);
-  mouseY=(e.clientY-r.top)*(H/r.height);
+  mx=(e.clientX-r.left)*(W/r.width);
+  my=(e.clientY-r.top)*(H/r.height);
 });
-cv.addEventListener('click',e=>{
-  let r=cv.getBoundingClientRect();
-  let mx=(e.clientX-r.left)*(W/r.width);
-  let my=(e.clientY-r.top)*(H/r.height);
+
+/* ── menu button helper ── */
+function btn(x,y,w,h,label,color,active){
+  let hover=mx>x&&mx<x+w&&my>y&&my<y+h;
+  let bg=active?color+'33':(hover?color+'22':'#11111166');
+  let border=active?color:(hover?color+'aa':color+'44');
+  cx.fillStyle=bg;cx.fillRect(x,y,w,h);
+  cx.strokeStyle=border;cx.lineWidth=active?3:1;cx.strokeRect(x,y,w,h);
+  cx.fillStyle=active?color:(hover?color+'cc':color+'88');
+  cx.font='bold 16px monospace';cx.textAlign='center';cx.textBaseline='middle';
+  cx.fillText(label,x+w/2,y+h/2);
+  return hover;
+}
+function btnClick(bx,by,bw,bh){return mx>bx&&mx<bx+bw&&my>by&&my<by+bh;}
+
+cv.addEventListener('click',()=>{
   if(st==='menu'){
-    // Check difficulty buttons
-    if(my>FCY+10&&my<FCY+70){
-      if(mx>FCX-220&&mx<FCX-30){diff='easy';cfg=DIFF.easy;startGame();}
-      if(mx>FCX-15&&mx<FCX+15){diff='medium';cfg=DIFF.medium;startGame();}
-      if(mx>FCX+30&&mx<FCX+220){diff='hard';cfg=DIFF.hard;startGame();}
-    }
+    const bw=140,bh=42,gap=15;
+    const totalW=3*bw+2*gap;
+    const sx=FCX-totalW/2;
+
+    // Diff row
+    let dy=FCY-50;
+    if(btnClick(sx,dy,bw,bh)){optDiff='easy';cfg=DIFF.easy;}
+    if(btnClick(sx+bw+gap,dy,bw,bh)){optDiff='medium';cfg=DIFF.medium;}
+    if(btnClick(sx+2*(bw+gap),dy,bw,bh)){optDiff='hard';cfg=DIFF.hard;}
+
+    // Map row
+    dy=FCY+10;
+    if(btnClick(sx,dy,bw,bh))optMap='grass';
+    if(btnClick(sx+bw+gap,dy,bw,bh))optMap='dirt';
+    if(btnClick(sx+2*(bw+gap),dy,bw,bh))optMap='neon';
+
+    // Skin row
+    dy=FCY+70;
+    if(btnClick(sx,dy,bw,bh))optSkin='circle';
+    if(btnClick(sx+bw+gap,dy,bw,bh))optSkin='square';
+    if(btnClick(sx+2*(bw+gap),dy,bw,bh))optSkin='arrow';
+
+    // Play button
+    let pw=200,ph=50,px=FCX-pw/2,py=FCY+140;
+    if(btnClick(px,py,pw,ph))startGame();
   }
-  if(st==='gameover'){st='menu';}
+  if(st==='gameover')st='menu';
 });
 
 function startGame(){
   ea();sc=[0,0];gTime=0;resetPos();
+  mapCfg=MAPS[optMap];
   st='countdown';cdT=2.5;snd(780,.35,'sine',.1);
 }
 
@@ -167,20 +197,16 @@ function pBall(p,isBot){
 
     if(isBot){
       let kickAngle;
-      /* ── DIFFICULTY-BASED KICKING ── */
       if(Math.random()<cfg.goalAimChance){
-        // Aim at goal with noise based on difficulty
         let goalTargetY=GT+20+Math.random()*(GH-40);
         let ga=Math.atan2(goalTargetY-bl.y,FX-bl.x);
         ga+=(Math.random()-.5)*cfg.goalAimNoise;
         kickAngle=ga;
       }else{
-        // Physics-based kick (movement direction)
         if(ps>1)kickAngle=Math.atan2(p.vy,p.vx);
         else kickAngle=Math.atan2(ny,nx);
         kickAngle+=(Math.random()-.5)*.45;
       }
-      // Big miss chance
       if(Math.random()<cfg.bigMissChance){
         kickAngle+=(Math.random()-.5)*cfg.bigMissAngle;
         f*=cfg.bigMissPower;
@@ -268,7 +294,6 @@ function updBot(){
   let distBall=Math.sqrt((bl.x-bt.x)**2+(bl.y-bt.y)**2);
   let spd=cfg.speed;
 
-  // Mistakes
   if(botMistakeTimer>0){botMistakeTimer--;}
   else if(Math.random()<cfg.mistakeChance){
     botMistakeTimer=30+Math.random()*40;
@@ -277,26 +302,19 @@ function updBot(){
   }
 
   let tx,ty;
-
-  // Intercept fast ball
   if(bl.vx>3.5&&bl.x>FCX-60&&bsp>4){
     let tFrame=Math.max(1,(bt.x-bl.x)/Math.max(bl.vx,.5));
     let iy=bl.y+bl.vy*tFrame;
     iy=Math.max(FY+PR,Math.min(FY+FH-PR,iy));
     tx=FX+FW-70;ty=iy;spd=cfg.speed*1.15;
-  }
-  // Ball in bot half or center
-  else if(bl.x>FCX-80){
+  }else if(bl.x>FCX-80){
     if(bt.x>bl.x+5){tx=bl.x;ty=bl.y;spd=cfg.speed*1.05;}
     else{tx=bl.x+45;ty=bl.y;if(bl.y<FCY-50)ty=bl.y+40;else if(bl.y>FCY+50)ty=bl.y-40;}
-  }
-  // Ball in player half
-  else{
+  }else{
     if(bt.x>bl.x+10){tx=bl.x;ty=bl.y;spd=cfg.speed*1.05;}
     else{tx=bl.x+55;ty=bl.y;spd=cfg.speed*1.1;}
   }
 
-  // Depth limit based on difficulty
   let minXF=FX+FW*cfg.depthLimit;
   if(distBall>100)minXF=FX+FW*(cfg.depthLimit+0.1);
   tx=Math.max(minXF,tx);
@@ -338,23 +356,24 @@ function update(){
 function rBG(){
   cx.fillStyle='#0a0e14';cx.fillRect(0,0,W,H);
   let g=cx.createRadialGradient(FCX,FCY,50,FCX,FCY,500);
-  g.addColorStop(0,'rgba(25,50,35,0.3)');g.addColorStop(1,'rgba(0,0,0,0)');
+  g.addColorStop(0,mapCfg.bg);g.addColorStop(1,'rgba(0,0,0,0)');
   cx.fillStyle=g;cx.fillRect(0,0,W,H);
 }
 
 function rField(){
+  let mc=mapCfg;
   let sh=FH/12;
-  for(let i=0;i<12;i++){cx.fillStyle=i%2?'#278743':'#2b8c4a';cx.fillRect(FX,FY+i*sh,FW,sh+1);}
-  cx.strokeStyle='rgba(255,255,255,0.5)';cx.lineWidth=2;
+  for(let i=0;i<12;i++){cx.fillStyle=i%2?mc.stripe2:mc.stripe1;cx.fillRect(FX,FY+i*sh,FW,sh+1);}
+  cx.strokeStyle=mc.line;cx.lineWidth=2;
+  if(optMap==='neon'){cx.shadowBlur=8;cx.shadowColor=mc.line;}
   cx.strokeRect(FX,FY,FW,FH);
   cx.beginPath();cx.moveTo(FCX,FY);cx.lineTo(FCX,FY+FH);cx.stroke();
   cx.beginPath();cx.arc(FCX,FCY,60,0,6.28);cx.stroke();
-  cx.fillStyle='rgba(255,255,255,0.5)';cx.beginPath();cx.arc(FCX,FCY,4,0,6.28);cx.fill();
+  cx.fillStyle=mc.line;cx.beginPath();cx.arc(FCX,FCY,4,0,6.28);cx.fill();
   let pw=130,ph=280,py=FCY-ph/2;
   cx.strokeRect(FX,py,pw,ph);cx.strokeRect(FX+FW-pw,py,pw,ph);
   let gw=50,gh=140,gy=FCY-gh/2;
   cx.strokeRect(FX,gy,gw,gh);cx.strokeRect(FX+FW-gw,gy,gw,gh);
-  cx.fillStyle='rgba(255,255,255,0.5)';
   cx.beginPath();cx.arc(FX+100,FCY,3,0,6.28);cx.fill();
   cx.beginPath();cx.arc(FX+FW-100,FCY,3,0,6.28);cx.fill();
   let cr=14;
@@ -362,25 +381,32 @@ function rField(){
   cx.beginPath();cx.arc(FX+FW,FY,cr,Math.PI/2,Math.PI);cx.stroke();
   cx.beginPath();cx.arc(FX,FY+FH,cr,-Math.PI/2,0);cx.stroke();
   cx.beginPath();cx.arc(FX+FW,FY+FH,cr,Math.PI,Math.PI*1.5);cx.stroke();
+  cx.shadowBlur=0; // reset neon glow
 }
 
 function rGoals(){
+  let mc=mapCfg;
+  if(optMap==='neon'){cx.shadowBlur=10;cx.shadowColor=mc.goalPost;}
   cx.fillStyle='rgba(0,0,0,0.3)';cx.fillRect(FX-GD,GT,GD,GH);
-  cx.strokeStyle='rgba(255,255,255,0.1)';cx.lineWidth=1;
+  cx.strokeStyle='rgba(255,255,255,0.1)';cx.lineWidth=1;cx.shadowBlur=0;
   for(let y=GT;y<=GB;y+=12){cx.beginPath();cx.moveTo(FX-GD,y);cx.lineTo(FX,y);cx.stroke();}
   for(let x=FX-GD;x<=FX;x+=10){cx.beginPath();cx.moveTo(x,GT);cx.lineTo(x,GB);cx.stroke();}
-  cx.strokeStyle='#bbb';cx.lineWidth=4;
+  cx.strokeStyle=mc.goalPost;cx.lineWidth=4;
+  if(optMap==='neon'){cx.shadowBlur=12;cx.shadowColor=mc.goalPost;}
   cx.beginPath();cx.moveTo(FX,GT);cx.lineTo(FX-GD,GT);cx.lineTo(FX-GD,GB);cx.lineTo(FX,GB);cx.stroke();
+
   cx.fillStyle='rgba(0,0,0,0.3)';cx.fillRect(FX+FW,GT,GD,GH);
-  cx.strokeStyle='rgba(255,255,255,0.1)';cx.lineWidth=1;
+  cx.strokeStyle='rgba(255,255,255,0.1)';cx.lineWidth=1;cx.shadowBlur=0;
   for(let y=GT;y<=GB;y+=12){cx.beginPath();cx.moveTo(FX+FW,y);cx.lineTo(FX+FW+GD,y);cx.stroke();}
   for(let x=FX+FW;x<=FX+FW+GD;x+=10){cx.beginPath();cx.moveTo(x,GT);cx.lineTo(x,GB);cx.stroke();}
-  cx.strokeStyle='#bbb';cx.lineWidth=4;
+  cx.strokeStyle=mc.goalPost;cx.lineWidth=4;
+  if(optMap==='neon'){cx.shadowBlur=12;cx.shadowColor=mc.goalPost;}
   cx.beginPath();cx.moveTo(FX+FW,GT);cx.lineTo(FX+FW+GD,GT);cx.lineTo(FX+FW+GD,GB);cx.lineTo(FX+FW,GB);cx.stroke();
+  cx.shadowBlur=0;
 }
 
 function rTrail(){
-  for(let t of trail){cx.globalAlpha=t.a*.3;cx.fillStyle='#fff';cx.beginPath();cx.arc(t.x,t.y,t.s,0,6.28);cx.fill();}
+  for(let t of trail){cx.globalAlpha=t.a*.3;cx.fillStyle=optMap==='neon'?'#0ff':'#fff';cx.beginPath();cx.arc(t.x,t.y,t.s,0,6.28);cx.fill();}
   cx.globalAlpha=1;
 }
 
@@ -388,8 +414,10 @@ function rBall(){
   cx.fillStyle='rgba(0,0,0,0.18)';
   cx.beginPath();cx.ellipse(bl.x+3,bl.y+4,BR,BR*.55,0,0,6.28);cx.fill();
   let g=cx.createRadialGradient(bl.x-3,bl.y-3,1,bl.x,bl.y,BR);
-  g.addColorStop(0,'#ffffff');g.addColorStop(1,'#bbbbbb');
+  if(optMap==='neon'){g.addColorStop(0,'#fff');g.addColorStop(1,'#0ff');}
+  else{g.addColorStop(0,'#ffffff');g.addColorStop(1,'#bbbbbb');}
   cx.fillStyle=g;cx.beginPath();cx.arc(bl.x,bl.y,BR,0,6.28);cx.fill();
+  if(optMap==='neon'){cx.shadowBlur=10;cx.shadowColor='#0ff';cx.beginPath();cx.arc(bl.x,bl.y,BR,0,6.28);cx.stroke();cx.shadowBlur=0;}
   cx.strokeStyle='rgba(0,0,0,0.12)';cx.lineWidth=1;
   let sp=Math.sqrt(bl.vx*bl.vx+bl.vy*bl.vy);
   let rot=gTime*sp*.08;
@@ -399,26 +427,54 @@ function rBall(){
   }
 }
 
+/* ── player skin rendering ── */
 function rPlayer(p,col,lbl){
+  let sp=Math.sqrt(p.vx*p.vx+p.vy*p.vy);
+  let a=Math.atan2(p.vy,p.vx);
+
+  // Glow
   let g=cx.createRadialGradient(p.x,p.y,PR*.4,p.x,p.y,PR*2.2);
   g.addColorStop(0,col+'44');g.addColorStop(1,col+'00');
   cx.fillStyle=g;cx.beginPath();cx.arc(p.x,p.y,PR*2.2,0,6.28);cx.fill();
+
+  if(optMap==='neon'){cx.shadowBlur=8;cx.shadowColor=col;}
+
+  // Shadow
   cx.fillStyle='rgba(0,0,0,0.18)';
   cx.beginPath();cx.ellipse(p.x+2,p.y+4,PR,PR*.5,0,0,6.28);cx.fill();
+
+  // Body
   let bg=cx.createRadialGradient(p.x-4,p.y-4,2,p.x,p.y,PR);
   bg.addColorStop(0,col);bg.addColorStop(1,'rgba(0,0,0,0.35)');
-  cx.fillStyle=bg;cx.beginPath();cx.arc(p.x,p.y,PR,0,6.28);cx.fill();
-  cx.strokeStyle='rgba(255,255,255,0.25)';cx.lineWidth=2;
-  cx.beginPath();cx.arc(p.x,p.y,PR,0,6.28);cx.stroke();
-  let sp=Math.sqrt(p.vx*p.vx+p.vy*p.vy);
-  if(sp>1){
-    let a=Math.atan2(p.vy,p.vx);
+  cx.fillStyle=bg;
+
+  if(optSkin==='circle'){
+    cx.beginPath();cx.arc(p.x,p.y,PR,0,6.28);cx.fill();
+    cx.strokeStyle='rgba(255,255,255,0.25)';cx.lineWidth=2;cx.beginPath();cx.arc(p.x,p.y,PR,0,6.28);cx.stroke();
+  }else if(optSkin==='square'){
+    let s=PR*1.6;
+    cx.save();cx.translate(p.x,p.y);cx.rotate(a);
+    cx.beginPath();cx.roundRect(-s/2,-s/2,s,s,4);cx.fill();
+    cx.strokeStyle='rgba(255,255,255,0.25)';cx.lineWidth=2;cx.beginPath();cx.roundRect(-s/2,-s/2,s,s,4);cx.stroke();
+    cx.restore();
+  }else if(optSkin==='arrow'){
+    cx.save();cx.translate(p.x,p.y);cx.rotate(a);
+    cx.beginPath();cx.moveTo(PR*1.3,0);cx.lineTo(-PR*.8,-PR);cx.lineTo(-PR*.4,0);cx.lineTo(-PR*.8,PR);cx.closePath();cx.fill();
+    cx.strokeStyle='rgba(255,255,255,0.25)';cx.lineWidth=2;cx.stroke();
+    cx.restore();
+  }
+
+  cx.shadowBlur=0;
+
+  // Direction arrow (for circle skin only, others have built-in direction)
+  if(optSkin==='circle'&&sp>1){
     cx.fillStyle='rgba(255,255,255,0.6)';cx.beginPath();
     cx.moveTo(p.x+Math.cos(a)*PR*.5,p.y+Math.sin(a)*PR*.5);
     cx.lineTo(p.x+Math.cos(a)*PR*1.3,p.y+Math.sin(a)*PR*1.3);
     cx.lineTo(p.x+Math.cos(a+2.6)*PR*.6,p.y+Math.sin(a+2.6)*PR*.6);
     cx.closePath();cx.fill();
   }
+
   cx.fillStyle='rgba(255,255,255,0.8)';cx.font='bold 11px sans-serif';cx.textAlign='center';
   cx.fillText(lbl,p.x,p.y-PR-7);
 }
@@ -445,10 +501,9 @@ function rHUD(){
   let pct=dCD>0?1-dCD/DCD:1;
   cx.fillStyle=pct>=1?'#ff6b35':'#552200';cx.fillRect(bx,by,bw*pct,bh);
   if(pct>=1){cx.strokeStyle='rgba(255,107,53,0.5)';cx.lineWidth=1;cx.strokeRect(bx-1,by-1,bw+2,bh+2);}
-  /* difficulty badge */
-  let dCol=diff==='easy'?'#55ff55':diff==='medium'?'#ffaa00':'#ff4444';
+  let dCol=optDiff==='easy'?'#55ff55':optDiff==='medium'?'#ffaa00':'#ff4444';
   cx.fillStyle=dCol;cx.font='bold 10px sans-serif';cx.textAlign='left';
-  cx.fillText(diff.toUpperCase(),FX+4,FY+FH+16);
+  cx.fillText(optDiff.toUpperCase()+' | '+optMap.toUpperCase()+' | '+optSkin.toUpperCase(),FX+4,FY+FH+16);
 }
 
 function rCountdown(){
@@ -476,38 +531,46 @@ function rGoalCeleb(){
   }
 }
 
-/* ── menu with difficulty select ── */
+/* ── menu ── */
 function rMenu(){
-  cx.fillStyle='rgba(10,14,20,0.92)';cx.fillRect(0,0,W,H);
-  cx.font='bold 58px monospace';cx.textAlign='center';cx.textBaseline='middle';
-  cx.fillStyle='#fff';cx.fillText('1V1 FOOTBALL',FCX,FCY-100);
-  cx.font='16px sans-serif';cx.fillStyle='#888';cx.fillText('Select Difficulty',FCX,FCY-40);
+  cx.fillStyle='rgba(10,14,20,0.95)';cx.fillRect(0,0,W,H);
+  cx.font='bold 52px monospace';cx.textAlign='center';cx.textBaseline='middle';
+  cx.fillStyle='#fff';cx.fillText('1V1 FOOTBALL',FCX,FCY-130);
 
-  /* 3 buttons */
-  let bw=170,bh=50,by=FCY+10,gap=20;
-  let bx1=FCX-bw-gap/2-bw,bx2=FCX-bw/2,bx3=FCX+gap/2;
+  const bw=140,bh=42,gap=15;
+  const totalW=3*bw+2*gap;
+  const sx=FCX-totalW/2;
 
-  // Easy
-  let hov1=mouseX>bx1&&mouseX<bx1+bw&&mouseY>by&&mouseY<by+bh;
-  cx.fillStyle=hov1?'#2a5a2a':'#1a3a1a';cx.fillRect(bx1,by,bw,bh);
-  cx.strokeStyle='#55ff55';cx.lineWidth=hov1?3:1;cx.strokeRect(bx1,by,bw,bh);
-  cx.fillStyle='#55ff55';cx.font='bold 20px monospace';cx.fillText('EASY',bx1+bw/2,by+bh/2);
+  // Difficulty
+  cx.font='bold 13px sans-serif';cx.fillStyle='#888';cx.fillText('DIFFICULTY',FCX,FCY-72);
+  let dy=FCY-50;
+  btn(sx,dy,bw,bh,'EASY','#55ff55',optDiff==='easy');
+  btn(sx+bw+gap,dy,bw,bh,'MEDIUM','#ffaa00',optDiff==='medium');
+  btn(sx+2*(bw+gap),dy,bw,bh,'HARD','#ff4444',optDiff==='hard');
 
-  // Medium
-  let hov2=mouseX>bx2&&mouseX<bx2+bw&&mouseY>by&&mouseY<by+bh;
-  cx.fillStyle=hov2?'#5a4a1a':'#3a2a0a';cx.fillRect(bx2,by,bw,bh);
-  cx.strokeStyle='#ffaa00';cx.lineWidth=hov2?3:1;cx.strokeRect(bx2,by,bw,bh);
-  cx.fillStyle='#ffaa00';cx.font='bold 20px monospace';cx.fillText('MEDIUM',bx2+bw/2,by+bh/2);
+  // Maps
+  cx.font='bold 13px sans-serif';cx.fillStyle='#888';cx.fillText('MAP',FCX,FCY-12);
+  dy=FCY+10;
+  btn(sx,dy,bw,bh,'GRASS','#44aa44',optMap==='grass');
+  btn(sx+bw+gap,dy,bw,bh,'DIRT','#aa8833',optMap==='dirt');
+  btn(sx+2*(bw+gap),dy,bw,bh,'NEON','#00ffff',optMap==='neon');
 
-  // Hard
-  let hov3=mouseX>bx3&&mouseX<bx3+bw&&mouseY>by&&mouseY<by+bh;
-  cx.fillStyle=hov3?'#5a1a1a':'#3a0a0a';cx.fillRect(bx3,by,bw,bh);
-  cx.strokeStyle='#ff4444';cx.lineWidth=hov3?3:1;cx.strokeRect(bx3,by,bw,bh);
-  cx.fillStyle='#ff4444';cx.font='bold 20px monospace';cx.fillText('HARD',bx3+bw/2,by+bh/2);
+  // Skins
+  cx.font='bold 13px sans-serif';cx.fillStyle='#888';cx.fillText('STYLE',FCX,FCY+48);
+  dy=FCY+70;
+  btn(sx,dy,bw,bh,'CIRCLE','#ff6b35',optSkin==='circle');
+  btn(sx+bw+gap,dy,bw,bh,'SQUARE','#ff6b35',optSkin==='square');
+  btn(sx+2*(bw+gap),dy,bw,bh,'ARROW','#ff6b35',optSkin==='arrow');
 
-  cx.font='14px sans-serif';cx.fillStyle='#555';cx.textAlign='center';
-  cx.fillText('WASD to move  |  SPACE to dash  |  Run into the ball to kick',FCX,FCY+90);
-  cx.fillText('First to 5 goals wins',FCX,FCY+112);
+  // Play
+  let pw=200,ph=50,px=FCX-pw/2,py=FCY+140;
+  let hov=mx>px&&mx<px+pw&&my>py&&my<py+ph;
+  cx.fillStyle=hov?'#ffd700':'#ffc200';cx.fillRect(px,py,pw,ph);
+  cx.fillStyle='#0a0e14';cx.font='bold 22px monospace';
+  cx.fillText('PLAY',FCX,py+ph/2);
+
+  cx.font='14px sans-serif';cx.fillStyle='#444';cx.textAlign='center';
+  cx.fillText('WASD to move  |  SPACE to dash  |  First to 5 goals',FCX,FCY+210);
 }
 
 function rGameOver(){
